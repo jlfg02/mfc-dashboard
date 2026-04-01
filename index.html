@@ -11,57 +11,151 @@
   <script src="https://unpkg.com/recharts@2.5.0/umd/Recharts.js"></script>
 </head>
 <body>
-  <div id="root"></div>
-  <script type="text/babel">
-const { useState, useMemo } = React;
-const { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, Cell, AreaChart, Area } = Recharts;
-const MATCHES = [
-  { date:"Feb 21", opponent:"Total Futbol Acad.", tier:"Elite",    mins:80, pos:"6", result:"D 2-2", totalDist:6790, intensity:71,  hid:1106, hidMin:15.80, sprints:29, maxSpeed:7.50, rpe:5, load:480 },
-  { date:"Feb 22", opponent:"Santa Barbara SC",   tier:"Medium",   mins:70, pos:"6", result:"W 2-1", totalDist:5897, intensity:58,  hid:859,  hidMin:12.27, sprints:15, maxSpeed:6.85, rpe:7, load:413 },
-  { date:"Feb 28", opponent:"RSL Arizona Mesa",   tier:"Low",      mins:70, pos:"6", result:"W 7-0", totalDist:6431, intensity:82,  hid:823,  hidMin:11.76, sprints:21, maxSpeed:7.04, rpe:7, load:450 },
-  { date:"Mar 01", opponent:"RSL Arizona",        tier:"Strong",   mins:70, pos:"6", result:"W 3-2", totalDist:8129, intensity:102, hid:1051, hidMin:15.01, sprints:25, maxSpeed:7.04, rpe:9, load:569 },
-  { date:"Mar 07", opponent:"Ventura County",     tier:"Very Low", mins:70, pos:"6", result:"W 3-1", totalDist:6659, intensity:91,  hid:898,  hidMin:12.83, sprints:20, maxSpeed:7.08, rpe:7, load:466 },
-  { date:"Mar 14", opponent:"LA Galaxy",          tier:"Elite",    mins:75, pos:"8", result:"L 0-4", totalDist:8558, intensity:114, hid:1646, hidMin:21.95, sprints:53, maxSpeed:7.53, rpe:9, load:684 },
-  { date:"Mar 15", opponent:"LA Surf",            tier:"Medium",   mins:81, pos:"8", result:"W",     totalDist:7200, intensity:89,  hid:1100, hidMin:13.58, sprints:28, maxSpeed:7.20, rpe:8, load:576 },
-];
-const C={bg:"#050b15",panel:"#0a1628",border:"#0f2140",accent:"#00d4ff",green:"#22c55e",amber:"#f59e0b",red:"#ef4444",muted:"#3b5270",text:"#cbd5e1",dim:"#475569"};
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useMemo, useEffect } = React;
+const { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, Cell } = Recharts;
+
+const SHEET_ID = "1lGBQlrUJt6Rv-YIqnBNHZ4MIHiwYgu_0vHqsC5J4ark";
+const GID = "1971038813";
+
+function parseCSV(text) {
+  const lines = text.trim().split("\n");
+  const headers = lines[0].split(",").map(h => h.trim().replace(/^"|"$/g, ""));
+  return lines.slice(1).map(line => {
+    const cols = [];
+    let cur = "", inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') { inQ = !inQ; }
+      else if (ch === ',' && !inQ) { cols.push(cur); cur = ""; }
+      else { cur += ch; }
+    }
+    cols.push(cur);
+    const obj = {};
+    headers.forEach((h, i) => { obj[h] = (cols[i] || "").trim().replace(/^"|"$/g, ""); });
+    return obj;
+  });
+}
+
+function formatDate(raw) {
+  if (!raw) return "";
+  const d = new Date(raw);
+  if (isNaN(d)) return raw;
+  return d.toLocaleDateString("es-MX", { month: "short", day: "numeric" });
+}
+
+function rowToMatch(row) {
+  const mins = parseFloat(row["Minutes Played"]) || 0;
+  const dist = parseFloat(row["Total Distance (m)"]) || 0;
+  const intensity = parseFloat(row["Intensity (m/min)"]) || 0;
+  const hid = parseFloat(row["HID (m)"]) || 0;
+  const hidMin = parseFloat(row["HID per min"]) || (mins > 0 && hid > 0 ? parseFloat((hid / mins).toFixed(2)) : 0);
+  const workRate = parseFloat(row["Work Rate (%)"]) || 0;
+  const rpe = workRate > 0 ? Math.round(workRate / 10) : 6;
+  const load = Math.round(mins * rpe);
+  return {
+    date: formatDate(row["Date"]),
+    opponent: row["Opponent"] || "",
+    tier: row["Opponent Tier"] || "",
+    mins, pos: row["Position"] || "",
+    result: row["Result"] || "",
+    goals: parseFloat(row["Goals"]) || 0,
+    assists: parseFloat(row["Assists"]) || 0,
+    workRate, totalDist: dist, intensity, hid, hidMin,
+    sprintDist: parseFloat(row["Sprint Distance (m)"]) || 0,
+    hsr: parseFloat(row["HSR (m)"]) || 0,
+    rpe, load,
+  };
+}
+
+const C = {bg:"#050b15",panel:"#0a1628",border:"#0f2140",accent:"#00d4ff",green:"#22c55e",amber:"#f59e0b",red:"#ef4444",muted:"#3b5270",text:"#cbd5e1",dim:"#475569"};
+var tip = {contentStyle:{background:"#0a1628",border:"1px solid #0f2140",borderRadius:8,color:"#cbd5e1",fontSize:12},itemStyle:{color:"#cbd5e1"},labelStyle:{color:"#94a3b8"}};
+
 function computeACWR(s){return s.map(function(_,i){var a=s.slice(Math.max(0,i-6),i+1).reduce(function(x,y){return x+y.load;},0)/Math.min(7,i+1);var c=s.slice(Math.max(0,i-27),i+1).reduce(function(x,y){return x+y.load;},0)/Math.min(28,i+1);return Object.assign({},s[i],{acwr:c>0?+(a/c).toFixed(2):null});});}
 function acwrColor(v){if(!v)return C.muted;if(v<0.8)return C.amber;if(v<=1.3)return C.green;if(v<=1.5)return C.amber;return C.red;}
 function acwrLabel(v){if(!v)return"—";if(v<0.8)return"Underload";if(v<=1.3)return"Optimo";if(v<=1.5)return"Precaucion";return"OVERLOAD";}
-var tip={contentStyle:{background:"#0a1628",border:"1px solid #0f2140",borderRadius:8,color:"#cbd5e1",fontSize:12},itemStyle:{color:"#cbd5e1"},labelStyle:{color:"#94a3b8"}};
-function KPI(props){var label=props.label,value=props.value,unit=props.unit,color=props.color||C.accent,sub=props.sub;return <div style={{background:C.panel,border:"1px solid "+C.border,borderRadius:10,padding:"14px 18px",minWidth:120,flex:1}}><p style={{color:C.dim,fontSize:10,letterSpacing:2,textTransform:"uppercase",fontFamily:"monospace",marginBottom:4}}>{label}</p><p style={{color:color,fontSize:26,fontWeight:800,lineHeight:1}}>{value!=null?value:"—"}<span style={{fontSize:12,color:C.dim,marginLeft:3}}>{unit}</span></p>{sub&&<p style={{color:C.dim,fontSize:10,marginTop:4}}>{sub}</p>}</div>;}
-function ST(props){return <h3 style={{color:C.dim,fontSize:10,letterSpacing:3,textTransform:"uppercase",fontFamily:"monospace",borderBottom:"1px solid "+C.border,paddingBottom:8,marginBottom:14,marginTop:28}}>{props.children}</h3>;}
-function TrainingForm(props){
-  var onAdd=props.onAdd;
-  var empty={date:"",mins:70,totalDist:"",intensity:"",hid:"",sprintDist:"",sprints:"",accels:"",decels:"",maxSpeed:"",maxHR:"",avgHR:"",rpe:6};
-  var state=useState(empty);var f=state[0];var setF=state[1];
-  var openState=useState(false);var open=openState[0];var setOpen=openState[1];
-  function field(key,lbl,type,step){type=type||"number";step=step||"1";return <div style={{display:"flex",flexDirection:"column",gap:3}}><label style={{color:C.dim,fontSize:10,fontFamily:"monospace"}}>{lbl}</label><input type={type} step={step} value={f[key]} onChange={function(e){setF(function(p){var n=Object.assign({},p);n[key]=e.target.value;return n;});}} style={{background:"#050b15",border:"1px solid "+C.border,borderRadius:6,color:C.text,padding:"6px 10px",fontSize:13,width:"100%",outline:"none"}}/></div>;}
-  function submit(){if(!f.date||!f.totalDist)return;var load=Math.round(Number(f.mins)*Number(f.rpe));onAdd(Object.assign({},f,{type:"Training",mins:+f.mins,totalDist:+f.totalDist,intensity:+f.intensity,hid:+f.hid,hidMin:f.hid&&f.mins?+(+f.hid/+f.mins).toFixed(2):null,sprintDist:+f.sprintDist,sprints:+f.sprints,accels:+f.accels,decels:+f.decels,maxSpeed:+f.maxSpeed,maxHR:+f.maxHR||null,avgHR:+f.avgHR||null,rpe:+f.rpe,load:load}));setF(empty);setOpen(false);}
-  return <div style={{marginBottom:20}}><button onClick={function(){setOpen(function(o){return !o;});}} style={{background:open?C.panel:C.accent,color:open?C.accent:"#000",border:"1px solid "+C.accent,borderRadius:8,padding:"8px 18px",fontFamily:"monospace",fontSize:12,cursor:"pointer"}}>{open?"X Cancelar":"+ Registrar entrenamiento"}</button>{open&&<div style={{background:C.panel,border:"1px solid "+C.border,borderRadius:12,padding:20,marginTop:14}}><p style={{color:C.accent,fontFamily:"monospace",fontSize:11,marginBottom:14}}>NUEVA SESION</p><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:10}}>{field("date","Fecha","date")}{field("mins","Minutos")}{field("totalDist","Dist total (m)")}{field("intensity","Intensidad")}{field("hid","HID (m)")}{field("sprintDist","Sprint dist")}{field("sprints","Sprints")}{field("accels","Acels")}{field("decels","Decels")}{field("maxSpeed","Max Speed","number","0.01")}{field("maxHR","Max HR")}{field("avgHR","Avg HR")}<div style={{display:"flex",flexDirection:"column",gap:3}}><label style={{color:C.dim,fontSize:10,fontFamily:"monospace"}}>RPE (1-10)</label><input type="range" min={1} max={10} value={f.rpe} onChange={function(e){setF(function(p){return Object.assign({},p,{rpe:e.target.value});});}} style={{accentColor:C.accent}}/><span style={{color:C.accent,fontFamily:"monospace"}}>{f.rpe}</span></div></div><button onClick={submit} style={{marginTop:16,background:C.green,color:"#000",border:"none",borderRadius:8,padding:"9px 24px",fontFamily:"monospace",fontSize:12,cursor:"pointer",fontWeight:700}}>Guardar sesion</button></div>}</div>;
+
+function KPI({label,value,unit,color=C.accent,sub}){return <div style={{background:C.panel,border:"1px solid "+C.border,borderRadius:10,padding:"14px 18px",minWidth:120,flex:1}}><p style={{color:C.dim,fontSize:10,letterSpacing:2,textTransform:"uppercase",fontFamily:"monospace",marginBottom:4}}>{label}</p><p style={{color,fontSize:26,fontWeight:800,lineHeight:1}}>{value!=null?value:"—"}<span style={{fontSize:12,color:C.dim,marginLeft:3}}>{unit}</span></p>{sub&&<p style={{color:C.dim,fontSize:10,marginTop:4}}>{sub}</p>}</div>;}
+function ST({children}){return <h3 style={{color:C.dim,fontSize:10,letterSpacing:3,textTransform:"uppercase",fontFamily:"monospace",borderBottom:"1px solid "+C.border,paddingBottom:8,marginBottom:14,marginTop:28}}>{children}</h3>;}
+
+function TrainingForm({onAdd}){
+  const empty={date:"",mins:70,totalDist:"",intensity:"",hid:"",sprints:"",maxSpeed:"",rpe:6};
+  const [f,setF]=useState(empty);const [open,setOpen]=useState(false);
+  const field=(key,lbl,type="number",step="1")=><div style={{display:"flex",flexDirection:"column",gap:3}}><label style={{color:C.dim,fontSize:10,fontFamily:"monospace"}}>{lbl}</label><input type={type} step={step} value={f[key]} onChange={e=>setF(p=>({...p,[key]:e.target.value}))} style={{background:"#050b15",border:"1px solid "+C.border,borderRadius:6,color:C.text,padding:"6px 10px",fontSize:13,width:"100%",outline:"none"}}/></div>;
+  const submit=()=>{if(!f.date||!f.totalDist)return;const load=Math.round(+f.mins*+f.rpe);onAdd({...f,type:"Training",mins:+f.mins,totalDist:+f.totalDist,intensity:+f.intensity,hid:+f.hid,hidMin:f.hid&&f.mins?+((+f.hid/+f.mins).toFixed(2)):null,sprints:+f.sprints,maxSpeed:+f.maxSpeed,rpe:+f.rpe,load});setF(empty);setOpen(false);};
+  return <div style={{marginBottom:20}}><button onClick={()=>setOpen(o=>!o)} style={{background:open?C.panel:C.accent,color:open?C.accent:"#000",border:"1px solid "+C.accent,borderRadius:8,padding:"8px 18px",fontFamily:"monospace",fontSize:12,cursor:"pointer"}}>{open?"X Cancelar":"+ Registrar entrenamiento"}</button>{open&&<div style={{background:C.panel,border:"1px solid "+C.border,borderRadius:12,padding:20,marginTop:14}}><p style={{color:C.accent,fontFamily:"monospace",fontSize:11,marginBottom:14}}>NUEVA SESION</p><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:10}}>{field("date","Fecha","date")}{field("mins","Minutos")}{field("totalDist","Dist total (m)")}{field("intensity","Intensidad")}{field("hid","HID (m)")}{field("sprints","Sprints")}{field("maxSpeed","Max Speed","number","0.01")}<div style={{display:"flex",flexDirection:"column",gap:3}}><label style={{color:C.dim,fontSize:10,fontFamily:"monospace"}}>RPE (1-10)</label><input type="range" min={1} max={10} value={f.rpe} onChange={e=>setF(p=>({...p,rpe:e.target.value}))} style={{accentColor:C.accent}}/><span style={{color:C.accent,fontFamily:"monospace"}}>{f.rpe}</span></div></div><button onClick={submit} style={{marginTop:16,background:C.green,color:"#000",border:"none",borderRadius:8,padding:"9px 24px",fontFamily:"monospace",fontSize:12,cursor:"pointer",fontWeight:700}}>Guardar sesion</button></div>}</div>;
 }
-function TrainingTab(props){
-  var sessions=props.sessions;var onAdd=props.onAdd;
-  var withACWR=useMemo(function(){return computeACWR(sessions);},[sessions]);
-  var latest=withACWR[withACWR.length-1];
-  function avg(arr){return arr.length?+(arr.reduce(function(a,b){return a+b;},0)/arr.length).toFixed(2):null;}
-  var totalLoad=sessions.reduce(function(a,s){return a+s.load;},0);
+
+function TrainingTab({sessions,onAdd}){
+  const withACWR=useMemo(()=>computeACWR(sessions),[sessions]);
+  const latest=withACWR[withACWR.length-1];
+  const avg=arr=>arr.length?+(arr.reduce((a,b)=>a+b,0)/arr.length).toFixed(2):null;
+  const totalLoad=sessions.reduce((a,s)=>a+s.load,0);
   if(!sessions.length)return <div><TrainingForm onAdd={onAdd}/><div style={{textAlign:"center",padding:"60px 0",color:C.dim,fontFamily:"monospace",fontSize:13}}>No hay sesiones registradas.<br/><span style={{color:C.accent}}>Registra la primera sesion arriba</span></div></div>;
-  return <div><TrainingForm onAdd={onAdd}/>{latest&&latest.acwr&&<div style={{background:C.panel,border:"2px solid "+acwrColor(latest.acwr),borderRadius:12,padding:"14px 20px",display:"flex",alignItems:"center",gap:16,marginBottom:20}}><span style={{fontSize:28}}>{latest.acwr>1.5?"!":latest.acwr<0.8?"v":"ok"}</span><div><p style={{color:C.dim,fontSize:10,fontFamily:"monospace"}}>ACWR</p><p style={{color:acwrColor(latest.acwr),fontSize:28,fontWeight:900}}>{latest.acwr} <span style={{fontSize:14}}>{acwrLabel(latest.acwr)}</span></p></div></div>}<div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:4}}><KPI label="Sesiones" value={sessions.length} unit="" color={C.accent}/><KPI label="Max Speed avg" value={avg(sessions.map(function(s){return s.maxSpeed;}).filter(Boolean))} unit="m/s" color={C.green}/><KPI label="Avg HR" value={avg(sessions.map(function(s){return s.avgHR;}).filter(Boolean))} unit="bpm" color="#f97316"/><KPI label="Carga total" value={totalLoad} unit="UA" color={C.amber} sub="RPE x min"/></div><ST>ACWR</ST><ResponsiveContainer width="100%" height={180}><LineChart data={withACWR} margin={{top:4,right:10,bottom:0,left:-10}}><CartesianGrid strokeDasharray="3 3" stroke={C.border}/><XAxis dataKey="date" tick={{fill:C.dim,fontSize:10}}/><YAxis domain={[0,2.2]} tick={{fill:C.dim,fontSize:10}}/><Tooltip {...tip}/><ReferenceLine y={1.5} stroke={C.red} strokeDasharray="4 2"/><ReferenceLine y={0.8} stroke={C.amber} strokeDasharray="4 2"/><Line dataKey="acwr" name="ACWR" stroke={C.accent} strokeWidth={2.5} dot={false}/></LineChart></ResponsiveContainer><ST>DISTANCIA Y VELOCIDAD</ST><ResponsiveContainer width="100%" height={200}><BarChart data={sessions} margin={{top:4,right:10,bottom:0,left:-10}}><CartesianGrid strokeDasharray="3 3" stroke={C.border}/><XAxis dataKey="date" tick={{fill:C.dim,fontSize:10}}/><YAxis tick={{fill:C.dim,fontSize:10}}/><Tooltip {...tip}/><Legend wrapperStyle={{fontSize:11,color:C.dim}}/><Bar dataKey="totalDist" name="Dist Total" fill={C.muted} radius={[4,4,0,0]}/><Bar dataKey="hid" name="HID" fill={C.accent} radius={[4,4,0,0]}/></BarChart></ResponsiveContainer><ST>LOG SESIONES</ST><div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12,fontFamily:"monospace"}}><thead><tr style={{borderBottom:"1px solid "+C.border}}>{["Fecha","Min","Dist","HID","Sprints","MaxSpd","ACWR","Estado"].map(function(h){return <th key={h} style={{padding:"6px 10px",color:C.dim,textAlign:"left",fontSize:10}}>{h}</th>;})}</tr></thead><tbody>{withACWR.map(function(s,i){var col=acwrColor(s.acwr);return <tr key={i} style={{borderBottom:"1px solid #0f214044",background:i%2===0?"#00000022":"transparent"}}><td style={{padding:"6px 10px",color:C.accent}}>{s.date}</td><td style={{padding:"6px 10px",color:C.text}}>{s.mins}</td><td style={{padding:"6px 10px",color:C.text}}>{s.totalDist}</td><td style={{padding:"6px 10px",color:C.text}}>{s.hid}</td><td style={{padding:"6px 10px",color:C.text}}>{s.sprints}</td><td style={{padding:"6px 10px",color:C.green}}>{s.maxSpeed}</td><td style={{padding:"6px 10px",color:col,fontWeight:700}}>{s.acwr!=null?s.acwr:"-"}</td><td style={{padding:"6px 10px",color:col}}>{acwrLabel(s.acwr)}</td></tr>;})}</tbody></table></div></div>;
+  return <div><TrainingForm onAdd={onAdd}/>{latest?.acwr&&<div style={{background:C.panel,border:"2px solid "+acwrColor(latest.acwr),borderRadius:12,padding:"14px 20px",display:"flex",alignItems:"center",gap:16,marginBottom:20}}><span style={{fontSize:28}}>{latest.acwr>1.5?"!":latest.acwr<0.8?"v":"ok"}</span><div><p style={{color:C.dim,fontSize:10,fontFamily:"monospace"}}>ACWR</p><p style={{color:acwrColor(latest.acwr),fontSize:28,fontWeight:900}}>{latest.acwr} <span style={{fontSize:14}}>{acwrLabel(latest.acwr)}</span></p></div></div>}<div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:4}}><KPI label="Sesiones" value={sessions.length} unit="" color={C.accent}/><KPI label="Max Speed avg" value={avg(sessions.map(s=>s.maxSpeed).filter(Boolean))} unit="m/s" color={C.green}/><KPI label="Carga total" value={totalLoad} unit="UA" color={C.amber} sub="RPE x min"/></div><ST>ACWR</ST><ResponsiveContainer width="100%" height={180}><LineChart data={withACWR} margin={{top:4,right:10,bottom:0,left:-10}}><CartesianGrid strokeDasharray="3 3" stroke={C.border}/><XAxis dataKey="date" tick={{fill:C.dim,fontSize:10}}/><YAxis domain={[0,2.2]} tick={{fill:C.dim,fontSize:10}}/><Tooltip {...tip}/><ReferenceLine y={1.5} stroke={C.red} strokeDasharray="4 2"/><ReferenceLine y={0.8} stroke={C.amber} strokeDasharray="4 2"/><Line dataKey="acwr" name="ACWR" stroke={C.accent} strokeWidth={2.5} dot={false}/></LineChart></ResponsiveContainer><ST>LOG SESIONES</ST><div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12,fontFamily:"monospace"}}><thead><tr style={{borderBottom:"1px solid "+C.border}}>{["Fecha","Min","Dist","HID","Sprints","MaxSpd","ACWR","Estado"].map(h=><th key={h} style={{padding:"6px 10px",color:C.dim,textAlign:"left",fontSize:10}}>{h}</th>)}</tr></thead><tbody>{withACWR.map((s,i)=>{const col=acwrColor(s.acwr);return <tr key={i} style={{borderBottom:"1px solid #0f214044",background:i%2===0?"#00000022":"transparent"}}><td style={{padding:"6px 10px",color:C.accent}}>{s.date}</td><td style={{padding:"6px 10px",color:C.text}}>{s.mins}</td><td style={{padding:"6px 10px",color:C.text}}>{s.totalDist}</td><td style={{padding:"6px 10px",color:C.text}}>{s.hid}</td><td style={{padding:"6px 10px",color:C.text}}>{s.sprints}</td><td style={{padding:"6px 10px",color:C.green}}>{s.maxSpeed}</td><td style={{padding:"6px 10px",color:col,fontWeight:700}}>{s.acwr??"-"}</td><td style={{padding:"6px 10px",color:col}}>{acwrLabel(s.acwr)}</td></tr>;})}</tbody></table></div></div>;
 }
-function MatchesTab(){
-  function avg(key){var v=MATCHES.map(function(m){return m[key];}).filter(function(x){return x!=null;});return v.length?+(v.reduce(function(a,b){return a+b;},0)/v.length).toFixed(2):null;}
-  var avgSpeed=avg("maxSpeed");var avgHID=avg("hidMin");var avgInt=avg("intensity");var avgSprints=avg("sprints");
-  return <div><div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:4}}><KPI label="Partidos" value={MATCHES.length} unit="" color={C.accent}/><KPI label="Max Speed avg" value={avgSpeed} unit="m/s" color={C.green}/><KPI label="HID/min avg" value={avgHID} unit="m/min" color="#f97316"/><KPI label="Intensidad avg" value={avgInt} unit="m/min" color={C.accent}/><KPI label="Sprints avg" value={avgSprints} unit="" color={C.amber}/></div><ST>MAX SPEED</ST><ResponsiveContainer width="100%" height={200}><BarChart data={MATCHES} margin={{top:4,right:10,bottom:0,left:-10}}><CartesianGrid strokeDasharray="3 3" stroke={C.border}/><XAxis dataKey="opponent" tick={{fill:C.dim,fontSize:9}}/><YAxis domain={[6,8]} tick={{fill:C.dim,fontSize:10}}/><Tooltip {...tip}/><ReferenceLine y={avgSpeed} stroke={C.accent} strokeDasharray="4 2"/><Bar dataKey="maxSpeed" name="Max Speed" radius={[4,4,0,0]}>{MATCHES.map(function(m,i){return <Cell key={i} fill={m.maxSpeed===Math.max.apply(null,MATCHES.map(function(x){return x.maxSpeed;}))? C.green:C.muted}/>;})}</Bar></BarChart></ResponsiveContainer><ST>CARGA</ST><ResponsiveContainer width="100%" height={180}><BarChart data={MATCHES} margin={{top:4,right:10,bottom:0,left:-10}}><CartesianGrid strokeDasharray="3 3" stroke={C.border}/><XAxis dataKey="date" tick={{fill:C.dim,fontSize:10}}/><YAxis tick={{fill:C.dim,fontSize:10}}/><Tooltip {...tip}/><ReferenceLine y={600} stroke={C.red} strokeDasharray="4 2"/><Bar dataKey="load" name="Carga" radius={[4,4,0,0]}>{MATCHES.map(function(m,i){return <Cell key={i} fill={m.load>600?C.red:m.load>500?C.amber:C.green}/>;})}</Bar></BarChart></ResponsiveContainer><ST>HID/min vs INTENSIDAD</ST><ResponsiveContainer width="100%" height={200}><LineChart data={MATCHES} margin={{top:4,right:10,bottom:0,left:-10}}><CartesianGrid strokeDasharray="3 3" stroke={C.border}/><XAxis dataKey="date" tick={{fill:C.dim,fontSize:10}}/><YAxis tick={{fill:C.dim,fontSize:10}}/><Tooltip {...tip}/><Legend wrapperStyle={{fontSize:11,color:C.dim}}/><Line dataKey="hidMin" name="HID/min" stroke="#f97316" strokeWidth={2} dot={{r:4}}/><Line dataKey="intensity" name="Intensidad" stroke={C.accent} strokeWidth={2} dot={{r:4}}/></LineChart></ResponsiveContainer><ST>LOG PARTIDOS</ST><div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12,fontFamily:"monospace"}}><thead><tr style={{borderBottom:"1px solid "+C.border}}>{["Fecha","Rival","Tier","Min","Pos","Resultado","Dist","HID/min","Sprints","MaxSpd","RPE","Carga"].map(function(h){return <th key={h} style={{padding:"6px 10px",color:C.dim,textAlign:"left",fontSize:10}}>{h}</th>;})}</tr></thead><tbody>{MATCHES.map(function(m,i){return <tr key={i} style={{borderBottom:"1px solid #0f214044",background:i%2===0?"#00000022":"transparent"}}><td style={{padding:"6px 10px",color:C.accent}}>{m.date}</td><td style={{padding:"6px 10px",color:C.text,whiteSpace:"nowrap"}}>{m.opponent}</td><td style={{padding:"6px 10px",color:C.dim}}>{m.tier}</td><td style={{padding:"6px 10px",color:C.text}}>{m.mins}</td><td style={{padding:"6px 10px",color:C.accent}}>{m.pos}</td><td style={{padding:"6px 10px",color:m.result&&m.result.charAt(0)==="W"?C.green:m.result&&m.result.charAt(0)==="D"?C.amber:C.red}}>{m.result}</td><td style={{padding:"6px 10px",color:C.text}}>{m.totalDist}</td><td style={{padding:"6px 10px",color:"#f97316"}}>{m.hidMin}</td><td style={{padding:"6px 10px",color:C.text}}>{m.sprints}</td><td style={{padding:"6px 10px",color:C.green}}>{m.maxSpeed}</td><td style={{padding:"6px 10px",color:C.amber}}>{m.rpe}</td><td style={{padding:"6px 10px",color:m.load>600?C.red:m.load>500?C.amber:C.green}}>{m.load}</td></tr>;})}</tbody></table></div></div>;
+
+function MatchesTab({matches}){
+  if(!matches?.length)return <div style={{textAlign:"center",padding:"60px 0",color:C.dim,fontFamily:"monospace",fontSize:13}}>Cargando partidos desde Google Sheets...<br/><span style={{color:C.accent}}>Un momento</span></div>;
+  const avg=key=>{const v=matches.map(m=>m[key]).filter(x=>x>0);return v.length?+(v.reduce((a,b)=>a+b,0)/v.length).toFixed(2):null;};
+  return <div>
+    <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:4}}>
+      <KPI label="Partidos" value={matches.length} unit="" color={C.accent}/>
+      <KPI label="HID/min avg" value={avg("hidMin")} unit="m/min" color="#f97316"/>
+      <KPI label="Intensidad avg" value={avg("intensity")} unit="m/min" color={C.accent}/>
+    </div>
+    <ST>CARGA (Work Rate x Minutos)</ST>
+    <ResponsiveContainer width="100%" height={180}><BarChart data={matches} margin={{top:4,right:10,bottom:0,left:-10}}><CartesianGrid strokeDasharray="3 3" stroke={C.border}/><XAxis dataKey="date" tick={{fill:C.dim,fontSize:10}}/><YAxis tick={{fill:C.dim,fontSize:10}}/><Tooltip {...tip}/><ReferenceLine y={600} stroke={C.red} strokeDasharray="4 2"/><Bar dataKey="load" name="Carga" radius={[4,4,0,0]}>{matches.map((m,i)=><Cell key={i} fill={m.load>600?C.red:m.load>500?C.amber:C.green}/>)}</Bar></BarChart></ResponsiveContainer>
+    <ST>HID/min vs INTENSIDAD</ST>
+    <ResponsiveContainer width="100%" height={200}><LineChart data={matches} margin={{top:4,right:10,bottom:0,left:-10}}><CartesianGrid strokeDasharray="3 3" stroke={C.border}/><XAxis dataKey="date" tick={{fill:C.dim,fontSize:10}}/><YAxis tick={{fill:C.dim,fontSize:10}}/><Tooltip {...tip}/><Legend wrapperStyle={{fontSize:11,color:C.dim}}/><Line dataKey="hidMin" name="HID/min" stroke="#f97316" strokeWidth={2} dot={{r:4}}/><Line dataKey="intensity" name="Intensidad" stroke={C.accent} strokeWidth={2} dot={{r:4}}/></LineChart></ResponsiveContainer>
+    <ST>DISTANCIA TOTAL</ST>
+    <ResponsiveContainer width="100%" height={180}><BarChart data={matches} margin={{top:4,right:10,bottom:0,left:-10}}><CartesianGrid strokeDasharray="3 3" stroke={C.border}/><XAxis dataKey="date" tick={{fill:C.dim,fontSize:10}}/><YAxis tick={{fill:C.dim,fontSize:10}}/><Tooltip {...tip}/><Bar dataKey="totalDist" name="Dist Total (m)" fill={C.muted} radius={[4,4,0,0]}/></BarChart></ResponsiveContainer>
+    <ST>LOG PARTIDOS</ST>
+    <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12,fontFamily:"monospace"}}><thead><tr style={{borderBottom:"1px solid "+C.border}}>{["Fecha","Rival","Tier","Min","Pos","Result","Goles","Asis","Dist","Intens","HID/min","Work%"].map(h=><th key={h} style={{padding:"6px 10px",color:C.dim,textAlign:"left",fontSize:10}}>{h}</th>)}</tr></thead><tbody>{matches.map((m,i)=><tr key={i} style={{borderBottom:"1px solid #0f214044",background:i%2===0?"#00000022":"transparent"}}><td style={{padding:"6px 10px",color:C.accent}}>{m.date}</td><td style={{padding:"6px 10px",color:C.text,whiteSpace:"nowrap"}}>{m.opponent}</td><td style={{padding:"6px 10px",color:C.dim}}>{m.tier}</td><td style={{padding:"6px 10px",color:C.text}}>{m.mins}</td><td style={{padding:"6px 10px",color:C.accent}}>{m.pos}</td><td style={{padding:"6px 10px",color:m.result?.charAt(0)==="W"?C.green:m.result?.charAt(0)==="D"?C.amber:C.red}}>{m.result}</td><td style={{padding:"6px 10px",color:C.text}}>{m.goals}</td><td style={{padding:"6px 10px",color:C.text}}>{m.assists}</td><td style={{padding:"6px 10px",color:C.text}}>{m.totalDist}</td><td style={{padding:"6px 10px",color:C.accent}}>{m.intensity}</td><td style={{padding:"6px 10px",color:"#f97316"}}>{m.hidMin}</td><td style={{padding:"6px 10px",color:m.workRate>80?C.red:m.workRate>60?C.amber:C.green}}>{m.workRate}%</td></tr>)}</tbody></table></div>
+  </div>;
 }
+
 function Dashboard(){
-  var tabState=useState("training");var tab=tabState[0];var setTab=tabState[1];
-  var trState=useState([]);var training=trState[0];var setTraining=trState[1];
-  function addSession(s){setTraining(function(p){return p.concat([s]);});}
-  function tabBtn(id,lbl){return <button onClick={function(){setTab(id);}} style={{background:tab===id?C.accent:"transparent",color:tab===id?"#000":C.dim,border:"1px solid "+(tab===id?C.accent:C.border),borderRadius:8,padding:"8px 22px",fontFamily:"monospace",fontSize:12,cursor:"pointer",fontWeight:tab===id?700:400}}>{lbl}</button>;}
-  return <div style={{background:C.bg,minHeight:"100vh",color:C.text,fontFamily:"sans-serif",padding:"24px 28px",maxWidth:1100,margin:"0 auto"}}><style>{'@import url("https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;800&family=Barlow+Condensed:wght@700;900&family=DM+Mono&display=swap");*{box-sizing:border-box;margin:0;padding:0}body{background:#050b15}'}</style><div style={{marginBottom:24}}><p style={{color:C.accent,fontSize:10,fontFamily:"monospace",letterSpacing:3,textTransform:"uppercase",marginBottom:4}}>MLS NEXT - CHULA VISTA FC - U15</p><h1 style={{fontSize:38,fontWeight:900,letterSpacing:-1,lineHeight:1,color:"#f1f5f9"}}>MATEO - GPS PERFORMANCE</h1><p style={{color:C.dim,fontSize:12,marginTop:4}}>Posicion: 6/8 - Temporada 2026 - StatSports GPS</p></div><div style={{display:"flex",gap:10,marginBottom:24}}>{tabBtn("training","Training ("+training.length+")")}{tabBtn("matches","Partidos ("+MATCHES.length+")")}</div>{tab==="training"&&<TrainingTab sessions={training} onAdd={addSession}/>}{tab==="matches"&&<MatchesTab/>}<p style={{color:"#1e293b",fontSize:10,fontFamily:"monospace",textAlign:"center",marginTop:40}}>MATEO - CHULA VISTA FC - MLS NEXT - 2026</p></div>;
+  const [tab,setTab]=useState("matches");
+  const [training,setTraining]=useState([]);
+  const [matches,setMatches]=useState([]);
+  const [status,setStatus]=useState("loading");
+
+  useEffect(()=>{
+    const url="https://docs.google.com/spreadsheets/d/1lGBQlrUJt6Rv-YIqnBNHZ4MIHiwYgu_0vHqsC5J4ark/export?format=csv&gid=1971038813";
+    fetch(url)
+      .then(r=>r.text())
+      .then(text=>{
+        const rows=parseCSV(text);
+        const withData=rows.filter(r=>parseFloat(r["Total Distance (m)"])>0);
+        setMatches(withData.map(rowToMatch));
+        setStatus("ok");
+      })
+      .catch(e=>{console.error(e);setStatus("error");});
+  },[]);
+
+  const tabBtn=(id,lbl)=><button onClick={()=>setTab(id)} style={{background:tab===id?C.accent:"transparent",color:tab===id?"#000":C.dim,border:"1px solid "+(tab===id?C.accent:C.border),borderRadius:8,padding:"8px 22px",fontFamily:"monospace",fontSize:12,cursor:"pointer",fontWeight:tab===id?700:400}}>{lbl}</button>;
+
+  return <div style={{background:C.bg,minHeight:"100vh",color:C.text,fontFamily:"sans-serif",padding:"24px 28px",maxWidth:1100,margin:"0 auto"}}>
+    <style>{'@import url("https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;800&family=DM+Mono&display=swap");*{box-sizing:border-box;margin:0;padding:0}body{background:#050b15}'}</style>
+    <div style={{marginBottom:24}}>
+      <p style={{color:C.accent,fontSize:10,fontFamily:"monospace",letterSpacing:3,textTransform:"uppercase",marginBottom:4}}>MLS NEXT - CHULA VISTA FC - U15</p>
+      <h1 style={{fontSize:38,fontWeight:900,letterSpacing:-1,lineHeight:1,color:"#f1f5f9"}}>MATEO - GPS PERFORMANCE</h1>
+      <p style={{color:C.dim,fontSize:12,marginTop:4}}>Posicion: 6/8 - Temporada 2026 - StatSports GPS</p>
+    </div>
+    {status==="error"&&<div style={{background:"#1a0a0a",border:"1px solid "+C.red,borderRadius:8,padding:"10px 16px",marginBottom:16,color:C.red,fontFamily:"monospace",fontSize:12}}>Error al cargar datos. Verifica que el Sheet sea publico (cualquiera con el enlace puede ver).</div>}
+    <div style={{display:"flex",gap:10,marginBottom:24}}>
+      {tabBtn("matches","Partidos ("+matches.length+")")}
+      {tabBtn("training","Training ("+training.length+")")}
+    </div>
+    {tab==="matches"&&<MatchesTab matches={matches}/>}
+    {tab==="training"&&<TrainingTab sessions={training} onAdd={s=>setTraining(p=>[...p,s])}/>}
+    <p style={{color:"#1e293b",fontSize:10,fontFamily:"monospace",textAlign:"center",marginTop:40}}>MATEO - CHULA VISTA FC - MLS NEXT - 2026</p>
+  </div>;
 }
+
 ReactDOM.createRoot(document.getElementById("root")).render(<Dashboard/>);
-  </script>
+</script>
 </body>
 </html>
