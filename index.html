@@ -861,6 +861,54 @@ La velocidad subió el día 2 = sin fatiga neuromuscular aguda. Pero el HID/min 
 *Objetivo de la semana:*
 Recuperar cadena posterior sin perder explosividad. Próximo rival: Phoenix Rising FC (Apr 18), intensidad media — hay margen para llegar bien.`;
 
+function SleepBlock({ allSessions }) {
+  const matchesOnly = allSessions.filter(s => s.source === "match");
+  const rec = sleepRec(new Date(), matchesOnly, allSessions);
+  return (
+    <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderLeft: `4px solid ${C.purple}`, borderRadius: 10, padding: "16px 20px", display: "flex", gap: 24, flexWrap: "wrap", alignItems: "center" }}>
+      <div style={{ minWidth: 160 }}>
+        <p style={{ color: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace", letterSpacing: 2 }}>DORMIR A LAS</p>
+        <p style={{ color: C.purple, fontSize: 36, fontWeight: 800, fontFamily: "'Syne'", lineHeight: 1, marginTop: 4 }}>{rec.bedtime}</p>
+        <p style={{ color: C.text, fontSize: 11, fontFamily: "'Space Mono', monospace", marginTop: 6 }}>{rec.hours} de sueño</p>
+      </div>
+      <div style={{ flex: 1, minWidth: 240 }}>
+        <p style={{ color: C.text, fontFamily: "'Space Mono', monospace", fontSize: 11, lineHeight: 1.6 }}>{rec.reason}</p>
+        <p style={{ color: C.dim, fontFamily: "'Space Mono', monospace", fontSize: 10, marginTop: 8 }}>Levantar: <span style={{ color: C.accent }}>{rec.wake}</span></p>
+      </div>
+    </div>
+  );
+}
+
+function DinnerBlock({ allSessions }) {
+  const latest = allSessions.filter(s => s.load > 0).slice(-1)[0];
+  const d = dinnerRec(latest);
+  if (!d) return <p style={{ color: C.dim, fontFamily: "'Space Mono', monospace", fontSize: 11 }}>Sin sesión reciente para calcular cena.</p>;
+  return (
+    <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderLeft: `4px solid ${C.green}`, borderRadius: 10, padding: "16px 20px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
+        <div>
+          <p style={{ color: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace", letterSpacing: 2 }}>ÚLTIMA SESIÓN · {d.tag.toUpperCase()}</p>
+          <p style={{ color: C.green, fontSize: 24, fontWeight: 800, fontFamily: "'Syne'", marginTop: 4 }}>~{d.kcal} <span style={{ fontSize: 12, fontWeight: 400, color: C.dim }}>kcal gastadas</span></p>
+        </div>
+        <Badge color={C.green} label={d.level} />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "8px 14px", fontFamily: "'Space Mono', monospace", fontSize: 11 }}>
+        <span style={{ color: C.dim, textTransform: "uppercase", fontSize: 9, letterSpacing: 1 }}>Qué cenar</span>
+        <span style={{ color: C.text }}>{d.meal}</span>
+        <span style={{ color: C.dim, textTransform: "uppercase", fontSize: 9, letterSpacing: 1 }}>Ejemplo</span>
+        <span style={{ color: C.text }}>{d.example}</span>
+        <span style={{ color: C.dim, textTransform: "uppercase", fontSize: 9, letterSpacing: 1 }}>Meta calórica</span>
+        <span style={{ color: C.accent }}>{d.target}</span>
+        <span style={{ color: C.dim, textTransform: "uppercase", fontSize: 9, letterSpacing: 1 }}>Cuándo</span>
+        <span style={{ color: C.orange }}>{d.timing}</span>
+      </div>
+      <p style={{ color: C.dim, fontSize: 10, fontFamily: "'Space Mono', monospace", marginTop: 12, borderTop: `1px solid ${C.border}`, paddingTop: 8 }}>
+        Estimación: RPE × minutos × 7 kcal. Los carbohidratos (pasta, arroz, tortillas, pan, fruta) son los que reponen el glucógeno muscular usado en la sesión.
+      </p>
+    </div>
+  );
+}
+
 function RecoveryTab({ unified, daysSinceMatch, allSessions }) {
   const proto = recoveryProtocol(unified?.acwr, daysSinceMatch);
   const col = acwrColor(unified?.acwr);
@@ -903,53 +951,10 @@ function RecoveryTab({ unified, daysSinceMatch, allSessions }) {
       </div>
 
       <ST>HORARIO DE SUEÑO — HOY ({DOW_ES[new Date().getDay()]})</ST>
-      {(() => {
-        const rec = sleepRec(new Date(), matches, allSessions);
-        return (
-          <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderLeft: `4px solid ${C.purple}`, borderRadius: 10, padding: "16px 20px", display: "flex", gap: 24, flexWrap: "wrap", alignItems: "center" }}>
-            <div style={{ minWidth: 160 }}>
-              <p style={{ color: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace", letterSpacing: 2 }}>DORMIR A LAS</p>
-              <p style={{ color: C.purple, fontSize: 36, fontWeight: 800, fontFamily: "'Syne'", lineHeight: 1, marginTop: 4 }}>{rec.bedtime}</p>
-              <p style={{ color: C.text, fontSize: 11, fontFamily: "'Space Mono', monospace", marginTop: 6 }}>{rec.hours} de sueño</p>
-            </div>
-            <div style={{ flex: 1, minWidth: 240 }}>
-              <p style={{ color: C.text, fontFamily: "'Space Mono', monospace", fontSize: 11, lineHeight: 1.6 }}>{rec.reason}</p>
-              <p style={{ color: C.dim, fontFamily: "'Space Mono', monospace", fontSize: 10, marginTop: 8 }}>Levantar: <span style={{ color: C.accent }}>{rec.wake}</span></p>
-            </div>
-          </div>
-        );
-      })()}
+      <SleepBlock allSessions={allSessions} />
 
       <ST>CENA POST-SESIÓN — según gasto energético</ST>
-      {(() => {
-        const latest = allSessions.filter(s => s.load > 0).slice(-1)[0];
-        const d = dinnerRec(latest);
-        if (!d) return <p style={{ color: C.dim, fontFamily: "'Space Mono'", fontSize: 11 }}>Sin sesión reciente para calcular cena.</p>;
-        return (
-          <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderLeft: `4px solid ${C.green}`, borderRadius: 10, padding: "16px 20px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
-              <div>
-                <p style={{ color: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace", letterSpacing: 2 }}>ÚLTIMA SESIÓN · {d.tag.toUpperCase()}</p>
-                <p style={{ color: C.green, fontSize: 24, fontWeight: 800, fontFamily: "'Syne'", marginTop: 4 }}>~{d.kcal} <span style={{ fontSize: 12, fontWeight: 400, color: C.dim }}>kcal gastadas</span></p>
-              </div>
-              <Badge color={C.green} label={d.level} />
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "8px 14px", fontFamily: "'Space Mono', monospace", fontSize: 11 }}>
-              <span style={{ color: C.dim, textTransform: "uppercase", fontSize: 9, letterSpacing: 1 }}>Qué cenar</span>
-              <span style={{ color: C.text }}>{d.meal}</span>
-              <span style={{ color: C.dim, textTransform: "uppercase", fontSize: 9, letterSpacing: 1 }}>Ejemplo</span>
-              <span style={{ color: C.text }}>{d.example}</span>
-              <span style={{ color: C.dim, textTransform: "uppercase", fontSize: 9, letterSpacing: 1 }}>Meta calórica</span>
-              <span style={{ color: C.accent }}>{d.target}</span>
-              <span style={{ color: C.dim, textTransform: "uppercase", fontSize: 9, letterSpacing: 1 }}>Cuándo</span>
-              <span style={{ color: C.orange }}>{d.timing}</span>
-            </div>
-            <p style={{ color: C.dim, fontSize: 10, fontFamily: "'Space Mono'", marginTop: 12, borderTop: `1px solid ${C.border}`, paddingTop: 8 }}>
-              Estimación: RPE × minutos × 7 kcal. Los carbohidratos (pasta, arroz, tortillas, pan, fruta) son los que reponen el glucógeno muscular usado en la sesión.
-            </p>
-          </div>
-        );
-      })()}
+      <DinnerBlock allSessions={allSessions} />
 
       <ST>REGLAS CLAVE DE USO</ST>
       <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: "14px 18px", fontFamily: "'Space Mono', monospace", fontSize: 11, color: C.text, lineHeight: 1.7 }}>
