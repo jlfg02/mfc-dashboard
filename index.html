@@ -708,12 +708,6 @@ function recoveryProtocol(acwr, daysSinceMatch) {
   else if (a < 0.8) rhino = { pressure: 25, time: 15, timing: "Mantenimiento PM", mode: "Sequential", note: "Underload: uso ligero solo para circulación." };
   else rhino = { pressure: 30, time: 20, timing: "Post-entreno si RPE≥6", mode: "Sequential", note: "ACWR óptimo: uso condicional." };
 
-  // Kit Brazos Presoterapia PRO 3
-  let arms;
-  if (matchToday || matchYest) arms = { pressure: 35, time: 15, timing: "Post-partido o noche", note: "Uso ligero post-partido si hubo muchos tiros/portería o trabajo de brazos." };
-  else if (a > 1.3) arms = { pressure: 35, time: 20, timing: "Post-gym push-pull", note: "Solo los días de gym con trabajo de tren superior." };
-  else arms = { pressure: 30, time: 15, timing: "Post-gym", note: "Mantenimiento — útil los días de push-pull o pull-ups." };
-
   // Bañera de hielo XL (cold plunge)
   let ice;
   if (matchToday || matchYest) ice = { tempC: "10–13", time: "8–12 min", timing: "Entre 30 min y 2h post-partido", note: "Post-partido recuperación aguda. Respetar ventana: si es <30 min después, reduce adaptación (anti-inflamatorio fuerte)." };
@@ -722,7 +716,49 @@ function recoveryProtocol(acwr, daysSinceMatch) {
   else if (a < 0.8) ice = { tempC: "14–16", time: "5 min", timing: "Opcional, mañana", note: "Underload: uso recreativo, no diario (no interrumpir adaptación de base)." };
   else ice = { tempC: "12–14", time: "6–8 min", timing: "Pre-sueño, 2-3x semana", note: "Óptimo: uso moderado — NO dentro de 4h post-entreno si buscas adaptación de fuerza." };
 
-  return { rhino, arms, ice };
+  return { rhino, ice };
+}
+
+// ───── Horario de sueño (basado en día + contexto de partido/entreno) ─────
+const DOW_ES = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+function sameDay(a, b) {
+  if (!a || !b) return false;
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+function sleepRec(now, matches, allSessions) {
+  const dow = now.getDay();
+  const today = new Date(now); today.setHours(0, 0, 0, 0);
+  const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+  const twoDaysAgo = new Date(today); twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+
+  const matchToday = matches.some(m => m.dateObj && sameDay(m.dateObj, today));
+  const matchYesterday = matches.some(m => m.dateObj && sameDay(m.dateObj, yesterday));
+  const matchesLast2d = matches.filter(m => m.dateObj && m.dateObj >= twoDaysAgo && m.dateObj <= today).length;
+  const backToBack = matchesLast2d >= 2;
+  const trainingToday = allSessions.some(s => s.source === "training" && s.dateObj && sameDay(s.dateObj, today));
+
+  if (backToBack) return { bedtime: "20:15", hours: "9h 45min", reason: "Back-to-back — reparación muscular crítica.", wake: "5:45 AM (L-V) o libre (fin de semana)" };
+  if (matchToday)     return { bedtime: "20:30", hours: "9h 30min", reason: "Post-partido hoy — recuperación aguda es prioridad.", wake: "Libre" };
+  if (matchYesterday) return { bedtime: "20:30", hours: "9h 30min", reason: "Ayer hubo partido — aún en ventana de reparación.", wake: dow >= 1 && dow <= 5 ? "5:45 AM" : "Libre" };
+
+  if (dow >= 1 && dow <= 4) {
+    if (trainingToday) return { bedtime: "20:30", hours: "9h 15min", reason: `${DOW_ES[dow]} con entreno GPS — +15 min sobre baseline escolar.`, wake: "5:45 AM" };
+    return { bedtime: "20:45", hours: "9h", reason: `${DOW_ES[dow]} escolar baseline — 9h mínimo para U14 en alta carga.`, wake: "5:45 AM" };
+  }
+  if (dow === 5) return { bedtime: "21:00", hours: "8h 45min", reason: "Viernes — preservar despertar competitivo para sábado.", wake: "5:45 AM" };
+  if (dow === 6) return { bedtime: "21:00", hours: "flexible", reason: "Sábado — si hay partido domingo, no exceder 21:30.", wake: "Libre" };
+  return { bedtime: "21:15", hours: "8h 30min", reason: "Domingo — transición a semana escolar, no trasnochar.", wake: "5:45 AM lunes" };
+}
+
+// ───── Cena post-sesión (basada en gasto energético proxy = load × 7 kcal) ─
+function dinnerRec(lastSession) {
+  if (!lastSession || !lastSession.load) return null;
+  const kcal = Math.round(lastSession.load * 7);
+  const tag = lastSession.source === "match" ? `partido vs ${lastSession.opponent}` : "entrenamiento";
+  if (kcal < 300)  return { kcal, tag, level: "Día ligero o técnico", meal: "Plato balanceado", example: "Pollo o pescado + verduras + media taza de arroz o 2 tortillas", target: "~500 kcal", timing: "Dentro de 1 hora" };
+  if (kcal < 500)  return { kcal, tag, level: "Entreno medio", meal: "Plato con más carbohidratos", example: "Pasta o arroz con pollo + verduras + fruta", target: "~650 kcal", timing: "Dentro de 90 min" };
+  if (kcal < 800)  return { kcal, tag, level: "Entreno fuerte o partido", meal: "Plato grande + electrolitos", example: "Pasta con carne molida o pollo + verduras + agua con sales (Gatorade o LMNT)", target: "~900 kcal", timing: "Dentro de 2 h — ventana crítica" };
+  return { kcal, tag, level: "Partido elite o back-to-back", meal: "Cena fuerte + snack nocturno", example: "Cena completa (pasta + proteína + verduras) + 30 min antes de dormir: avena con leche o yogurt con fruta y miel", target: "~1100 kcal", timing: "Cena en 2 h + snack antes de acostarse" };
 }
 
 function ToolCard({ title, subtitle, color, protocol, icon }) {
@@ -848,7 +884,7 @@ function RecoveryTab({ unified, daysSinceMatch, allSessions }) {
         </div>
       </div>
 
-      <ST>PROTOCOLOS DE RECUPERACIÓN — 3 HERRAMIENTAS</ST>
+      <ST>PROTOCOLOS DE RECUPERACIÓN — HERRAMIENTAS (live al ACWR)</ST>
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
         <ToolCard
           title="Rhino Performance — Piernas"
@@ -858,13 +894,6 @@ function RecoveryTab({ unified, daysSinceMatch, allSessions }) {
           icon="🦵"
         />
         <ToolCard
-          title="Kit Brazos Presoterapia PRO 3"
-          subtitle="Presoterapia brazos · circulación tren superior"
-          color={C.orange}
-          protocol={proto.arms}
-          icon="💪"
-        />
-        <ToolCard
           title="Bañera de Hielo XL"
           subtitle="Cold plunge 119 gal · contraste térmico"
           color={C.blue}
@@ -872,6 +901,55 @@ function RecoveryTab({ unified, daysSinceMatch, allSessions }) {
           icon="🧊"
         />
       </div>
+
+      <ST>HORARIO DE SUEÑO — HOY ({DOW_ES[new Date().getDay()]})</ST>
+      {(() => {
+        const rec = sleepRec(new Date(), matches, allSessions);
+        return (
+          <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderLeft: `4px solid ${C.purple}`, borderRadius: 10, padding: "16px 20px", display: "flex", gap: 24, flexWrap: "wrap", alignItems: "center" }}>
+            <div style={{ minWidth: 160 }}>
+              <p style={{ color: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace", letterSpacing: 2 }}>DORMIR A LAS</p>
+              <p style={{ color: C.purple, fontSize: 36, fontWeight: 800, fontFamily: "'Syne'", lineHeight: 1, marginTop: 4 }}>{rec.bedtime}</p>
+              <p style={{ color: C.text, fontSize: 11, fontFamily: "'Space Mono', monospace", marginTop: 6 }}>{rec.hours} de sueño</p>
+            </div>
+            <div style={{ flex: 1, minWidth: 240 }}>
+              <p style={{ color: C.text, fontFamily: "'Space Mono', monospace", fontSize: 11, lineHeight: 1.6 }}>{rec.reason}</p>
+              <p style={{ color: C.dim, fontFamily: "'Space Mono', monospace", fontSize: 10, marginTop: 8 }}>Levantar: <span style={{ color: C.accent }}>{rec.wake}</span></p>
+            </div>
+          </div>
+        );
+      })()}
+
+      <ST>CENA POST-SESIÓN — según gasto energético</ST>
+      {(() => {
+        const latest = allSessions.filter(s => s.load > 0).slice(-1)[0];
+        const d = dinnerRec(latest);
+        if (!d) return <p style={{ color: C.dim, fontFamily: "'Space Mono'", fontSize: 11 }}>Sin sesión reciente para calcular cena.</p>;
+        return (
+          <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderLeft: `4px solid ${C.green}`, borderRadius: 10, padding: "16px 20px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
+              <div>
+                <p style={{ color: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace", letterSpacing: 2 }}>ÚLTIMA SESIÓN · {d.tag.toUpperCase()}</p>
+                <p style={{ color: C.green, fontSize: 24, fontWeight: 800, fontFamily: "'Syne'", marginTop: 4 }}>~{d.kcal} <span style={{ fontSize: 12, fontWeight: 400, color: C.dim }}>kcal gastadas</span></p>
+              </div>
+              <Badge color={C.green} label={d.level} />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "8px 14px", fontFamily: "'Space Mono', monospace", fontSize: 11 }}>
+              <span style={{ color: C.dim, textTransform: "uppercase", fontSize: 9, letterSpacing: 1 }}>Qué cenar</span>
+              <span style={{ color: C.text }}>{d.meal}</span>
+              <span style={{ color: C.dim, textTransform: "uppercase", fontSize: 9, letterSpacing: 1 }}>Ejemplo</span>
+              <span style={{ color: C.text }}>{d.example}</span>
+              <span style={{ color: C.dim, textTransform: "uppercase", fontSize: 9, letterSpacing: 1 }}>Meta calórica</span>
+              <span style={{ color: C.accent }}>{d.target}</span>
+              <span style={{ color: C.dim, textTransform: "uppercase", fontSize: 9, letterSpacing: 1 }}>Cuándo</span>
+              <span style={{ color: C.orange }}>{d.timing}</span>
+            </div>
+            <p style={{ color: C.dim, fontSize: 10, fontFamily: "'Space Mono'", marginTop: 12, borderTop: `1px solid ${C.border}`, paddingTop: 8 }}>
+              Estimación: RPE × minutos × 7 kcal. Los carbohidratos (pasta, arroz, tortillas, pan, fruta) son los que reponen el glucógeno muscular usado en la sesión.
+            </p>
+          </div>
+        );
+      })()}
 
       <ST>REGLAS CLAVE DE USO</ST>
       <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: "14px 18px", fontFamily: "'Space Mono', monospace", fontSize: 11, color: C.text, lineHeight: 1.7 }}>
