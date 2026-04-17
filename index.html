@@ -53,7 +53,9 @@ const MATCH_GID = "1971038813";
 // debe tener export CSV habilitado. Cambiar este valor cuando se conozca el gid real.
 const TRAINING_GID = "2018907103"; // WEEKPRACTICE_LOG
 
-const csvUrl = (gid) => `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${gid}`;
+// cache-buster: Google Sheets cachea agresivamente el CSV export (~5 min).
+// Con &cb=timestamp forzamos fetch fresco en cada carga del dashboard.
+const csvUrl = (gid) => `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${gid}&cb=${Date.now()}`;
 
 const TOOLTIP = {
   contentStyle: { background: "#0b1520", border: "1px solid #1a2d44", borderRadius: 8, color: "#c9d6e3", fontSize: 11, fontFamily: "'Space Mono', monospace" },
@@ -163,9 +165,12 @@ function rowToMatch(row) {
 
 // Parser para WEEKPRACTICE_LOG — columnas A..X según skill MFC
 function rowToTraining(row) {
+  // Lookup case-insensitive para tolerar diferencias en headers del Sheet
+  const lowerMap = {};
+  Object.keys(row).forEach(k => { lowerMap[k.toLowerCase().trim()] = row[k]; });
   const pick = (...keys) => {
     for (const k of keys) {
-      const v = row[k];
+      const v = row[k] ?? lowerMap[k.toLowerCase().trim()];
       if (v != null && String(v).trim() !== "") return v;
     }
     return "";
@@ -880,14 +885,17 @@ function SleepBlock({ allSessions }) {
 }
 
 function DinnerBlock({ allSessions }) {
-  const latest = allSessions.filter(s => s.load > 0).slice(-1)[0];
+  // "Latest" = mayor dateObj (más reciente), no simplemente último del array
+  const withDates = allSessions.filter(s => s.load > 0 && s.dateObj);
+  const latest = withDates.length ? withDates.reduce((a, b) => (a.dateObj > b.dateObj ? a : b)) : null;
   const d = dinnerRec(latest);
   if (!d) return <p style={{ color: C.dim, fontFamily: "'Space Mono', monospace", fontSize: 11 }}>Sin sesión reciente para calcular cena.</p>;
+  const dateStr = latest?.dateObj?.toLocaleDateString("es-MX", { weekday: "short", month: "short", day: "numeric" });
   return (
     <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderLeft: `4px solid ${C.green}`, borderRadius: 10, padding: "16px 20px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
         <div>
-          <p style={{ color: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace", letterSpacing: 2 }}>ÚLTIMA SESIÓN · {d.tag.toUpperCase()}</p>
+          <p style={{ color: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace", letterSpacing: 2 }}>ÚLTIMA SESIÓN · {d.tag.toUpperCase()} · {dateStr}</p>
           <p style={{ color: C.green, fontSize: 24, fontWeight: 800, fontFamily: "'Syne'", marginTop: 4 }}>~{d.kcal} <span style={{ fontSize: 12, fontWeight: 400, color: C.dim }}>kcal gastadas</span></p>
         </div>
         <Badge color={C.green} label={d.level} />
@@ -1020,14 +1028,21 @@ function Dashboard() {
     }
     fetch(csvUrl(TRAINING_GID)).then(r => r.text()).then(text => {
       const rows = parseCSV(text);
-      const parsed = rows.filter(r => {
-        const d = r["Session Date"] || r["Date"] || r["Fecha"];
-        return d && String(d).trim() !== "";
-      }).map(rowToTraining);
+      // Filter case-insensitive por cualquier variante de "Session Date"
+      const dateKeys = ["session date", "date", "fecha"];
+      const filtered = rows.filter(row => {
+        for (const k of Object.keys(row)) {
+          if (dateKeys.includes(k.toLowerCase().trim()) && row[k] && String(row[k]).trim() !== "") return true;
+        }
+        return false;
+      });
+      const parsed = filtered.map(rowToTraining).filter(s => s.dateObj && s.mins > 0);
+      console.log(`[Training CSV] rows=${rows.length}, filtered=${filtered.length}, parsed=${parsed.length}`);
       if (parsed.length) {
         setTraining(parsed);
         setTrainStatus("ok");
       } else {
+        console.warn("[Training CSV] 0 rows válidas — usando SEED. Revisa headers del Sheet.");
         setTraining(TRAINING_SEED);
         setTrainStatus("fallback");
       }
