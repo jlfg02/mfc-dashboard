@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mateo · GPS Performance Dashboard v4</title>
+  <title>Mateo · GPS Performance Dashboard v5</title>
   <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -18,12 +18,12 @@
     ::-webkit-scrollbar-track { background: #060a0f; }
     ::-webkit-scrollbar-thumb { background: #1a2d44; border-radius: 2px; }
     input[type=range] { accent-color: #00e5ff; width: 100%; }
-    input[type=date], input[type=number], select {
+    input[type=date], input[type=number], select, textarea {
       background: #060a0f; border: 1px solid #1a2d44; border-radius: 5px;
       color: #c9d6e3; padding: 7px 11px; font-size: 12px; font-family: 'Space Mono', monospace;
       width: 100%; outline: none; transition: border-color .2s;
     }
-    input:focus, select:focus { border-color: #00e5ff; }
+    input:focus, select:focus, textarea:focus { border-color: #00e5ff; }
     table { border-collapse: collapse; width: 100%; }
     th { font-family: 'Space Mono', monospace; font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: #3d5a73; padding: 8px 10px; text-align: left; border-bottom: 1px solid #0f1e2e; }
     td { padding: 8px 10px; font-family: 'Space Mono', monospace; font-size: 11px; border-bottom: 1px solid #0a1520; }
@@ -42,8 +42,18 @@ const C = {
   border: "#1a2d44", accent: "#00e5ff", green: "#22d47a",
   amber: "#f5a623", red: "#f04040", purple: "#a855f7",
   text: "#c9d6e3", dim: "#3d5a73", muted: "#1e3349",
-  orange: "#ff6b35"
+  orange: "#ff6b35", blue: "#4aa3ff"
 };
+
+// ───── Google Sheets CSV export ────────────────────────────────────────────
+const SHEET_ID = "1lGBQlrUJt6Rv-YIqnBNHZ4MIHiwYgu_0vHqsC5J4ark";
+const MATCH_GID = "1971038813";
+// WEEKPRACTICE_LOG gid — si está disponible, pull en vivo; si no, usa SEED.
+// Para habilitar lectura en vivo: el Sheet debe estar publicado y la pestaña WEEKPRACTICE_LOG
+// debe tener export CSV habilitado. Cambiar este valor cuando se conozca el gid real.
+const TRAINING_GID = "2018907103"; // WEEKPRACTICE_LOG
+
+const csvUrl = (gid) => `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${gid}`;
 
 const TOOLTIP = {
   contentStyle: { background: "#0b1520", border: "1px solid #1a2d44", borderRadius: 8, color: "#c9d6e3", fontSize: 11, fontFamily: "'Space Mono', monospace" },
@@ -106,6 +116,11 @@ function formatDate(raw) {
   return d.toLocaleDateString("es-MX", { month: "short", day: "numeric" });
 }
 
+function daysBetween(a, b) {
+  if (!a || !b) return null;
+  return Math.round((b - a) / 86400000);
+}
+
 function rowToMatch(row) {
   const mins = parseFloat(row["Minutes Played"]) || 0;
   const dist = parseFloat(row["Total Distance (m)"]) || 0;
@@ -128,6 +143,7 @@ function rowToMatch(row) {
   const z4 = parseFloat(row["Z4"] || row["HR Z4"] || 0);
   const z5 = parseFloat(row["Z5"] || row["HR Z5"] || 0);
   return {
+    source: "match",
     rawDate, dateObj, date: formatDate(rawDate),
     opponent: row["Opponent"] || "", tier, mdi,
     mins, pos: row["Position"] || "", result: row["Result"] || "",
@@ -142,6 +158,49 @@ function rowToMatch(row) {
     redZone: parseFloat(row["Time in Red Zone"] || row["Red Zone (min)"] || 0),
     accel: parseFloat(row["Accelerations"] || row["Accels"] || 0),
     decel: parseFloat(row["Decelerations"] || row["Decels"] || 0),
+  };
+}
+
+// Parser para WEEKPRACTICE_LOG — columnas A..X según skill MFC
+function rowToTraining(row) {
+  const pick = (...keys) => {
+    for (const k of keys) {
+      const v = row[k];
+      if (v != null && String(v).trim() !== "") return v;
+    }
+    return "";
+  };
+  const rawDate = pick("Session Date", "Date", "Fecha");
+  const dateObj = parseDate(rawDate);
+  const mins = parseFloat(pick("Minutes", "Min", "Minutos")) || 0;
+  const hid = parseFloat(pick("HID", "HID (m)")) || 0;
+  const hidMin = parseFloat(pick("HID/min", "HID per min")) || (mins > 0 && hid > 0 ? +(hid / mins).toFixed(2) : 0);
+  const totalDist = parseFloat(pick("Total Dist", "Total Distance (m)", "Total Distance")) || 0;
+  const intensity = parseFloat(pick("Intensity", "Intensity (m/min)")) || 0;
+  const hsr = parseFloat(pick("HSR", "HSR (m)")) || 0;
+  const sprints = parseFloat(pick("Sprints", "Sprints (#)")) || 0;
+  const accel = parseFloat(pick("Accel", "Accelerations", "Accelerations (#)")) || 0;
+  const decel = parseFloat(pick("Decel", "Decelerations", "Decelerations (#)")) || 0;
+  const maxSpeed = parseFloat(pick("Max Speed", "Max Speed (m/s)")) || 0;
+  const rpeRaw = parseFloat(pick("RPE", "RPE (1-10)"));
+  const rpe = !isNaN(rpeRaw) && rpeRaw > 0 ? rpeRaw : 6;
+  const load = Math.round(mins * rpe);
+  const avgHR = parseFloat(pick("Avg HR", "Avg HR (bpm)")) || 0;
+  const maxHR = parseFloat(pick("Max HR", "Max HR (bpm)")) || 0;
+  const z1 = parseFloat(pick("Z1", "HR Z1")) || 0;
+  const z2 = parseFloat(pick("Z2", "HR Z2")) || 0;
+  const z3 = parseFloat(pick("Z3", "HR Z3")) || 0;
+  const z4 = parseFloat(pick("Z4", "HR Z4")) || 0;
+  const z5 = parseFloat(pick("Z5", "HR Z5")) || 0;
+  return {
+    source: "training",
+    type: pick("Type", "Session Type") || "Training",
+    name: pick("Name", "Session Name") || "",
+    rawDate, dateObj, date: formatDate(rawDate),
+    mins, totalDist, intensity, hid, hidMin, hsr,
+    sprints, accel, decel, maxSpeed,
+    rpe, load, avgHR, maxHR,
+    z1, z2, z3, z4, z5,
   };
 }
 
@@ -221,12 +280,13 @@ function Badge({ color, label }) {
   return <span style={{ background: color + "22", border: `1px solid ${color}44`, borderRadius: 4, padding: "2px 8px", color, fontSize: 9, fontFamily: "'Space Mono', monospace", letterSpacing: 1 }}>{label}</span>;
 }
 
-function AlertBar({ acwr, loadRatio }) {
+function AlertBar({ acwr, loadRatio, scope = "" }) {
   const alerts = [];
-  if (acwr > 1.5) alerts.push({ color: C.red, text: `ACWR ${acwr} — Riesgo alto de lesión. Reducir carga inmediatamente.` });
-  else if (acwr > 1.3) alerts.push({ color: C.amber, text: `ACWR ${acwr} — Zona precaución. Monitorear recuperación.` });
-  else if (acwr != null && acwr < 0.8) alerts.push({ color: C.amber, text: `ACWR ${acwr} — Underload. Riesgo de desentrenamiento.` });
-  if (loadRatio > 1.35) alerts.push({ color: C.red, text: `Load Ratio ${loadRatio} — HID excede expected para este rival. Revisar gestión de carga.` });
+  const pre = scope ? `[${scope}] ` : "";
+  if (acwr > 1.5) alerts.push({ color: C.red, text: `${pre}ACWR ${acwr} — Riesgo alto de lesión. Reducir carga inmediatamente.` });
+  else if (acwr > 1.3) alerts.push({ color: C.amber, text: `${pre}ACWR ${acwr} — Zona precaución. Monitorear recuperación.` });
+  else if (acwr != null && acwr < 0.8) alerts.push({ color: C.amber, text: `${pre}ACWR ${acwr} — Underload. Riesgo de desentrenamiento.` });
+  if (loadRatio > 1.35) alerts.push({ color: C.red, text: `${pre}Load Ratio ${loadRatio} — HID excede expected para este rival.` });
   if (!alerts.length) return null;
   return (
     <div style={{ marginBottom: 16 }}>
@@ -236,6 +296,39 @@ function AlertBar({ acwr, loadRatio }) {
           <span style={{ color: a.color, fontFamily: "'Space Mono', monospace", fontSize: 11 }}>{a.text}</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ───── UNIFIED ACWR BANNER ─────────────────────────────────────────────────
+function UnifiedACWRBanner({ unified, matchOnly, trainingOnly, daysSinceMatch }) {
+  if (!unified?.acwr) return null;
+  const col = acwrColor(unified.acwr);
+  return (
+    <div style={{ background: `linear-gradient(135deg, ${C.panel}, ${C.panel2})`, border: `2px solid ${col}`, borderRadius: 14, padding: "18px 22px", marginBottom: 20, display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
+      <div style={{ width: 56, height: 56, borderRadius: "50%", background: col + "22", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <span style={{ color: col, fontSize: 24, fontWeight: 900 }}>{unified.acwr > 1.5 ? "!" : unified.acwr < 0.8 ? "↓" : "✓"}</span>
+      </div>
+      <div style={{ flex: 1, minWidth: 240 }}>
+        <p style={{ color: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace", letterSpacing: 3, textTransform: "uppercase" }}>ACWR REAL · Unificado (partidos + entrenos)</p>
+        <p style={{ color: col, fontSize: 34, fontWeight: 900, fontFamily: "'Syne', sans-serif", lineHeight: 1, marginTop: 3 }}>
+          {unified.acwr} <span style={{ fontSize: 14, fontWeight: 400 }}>{acwrLabel(unified.acwr)}</span>
+        </p>
+        <p style={{ color: C.dim, fontSize: 10, fontFamily: "'Space Mono', monospace", marginTop: 6 }}>
+          7d aguda: {unified.acuteLoad} UA · 28d crónica: {unified.chronicLoad} UA
+          {daysSinceMatch != null && ` · ${daysSinceMatch}d desde último partido`}
+        </p>
+      </div>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", minWidth: 110 }}>
+          <p style={{ color: C.dim, fontSize: 8, fontFamily: "'Space Mono', monospace", letterSpacing: 2 }}>PARCIAL PARTIDOS</p>
+          <p style={{ color: acwrColor(matchOnly), fontSize: 16, fontWeight: 700, fontFamily: "'Syne'" }}>{matchOnly ?? "—"}</p>
+        </div>
+        <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", minWidth: 110 }}>
+          <p style={{ color: C.dim, fontSize: 8, fontFamily: "'Space Mono', monospace", letterSpacing: 2 }}>PARCIAL TRAINING</p>
+          <p style={{ color: acwrColor(trainingOnly), fontSize: 16, fontWeight: 700, fontFamily: "'Syne'" }}>{trainingOnly ?? "—"}</p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -261,16 +354,16 @@ function MatchesTab({ matches }) {
 
   return (
     <div>
-      <AlertBar acwr={latest?.acwr} loadRatio={latest?.loadRatio} />
+      <AlertBar acwr={latest?.acwr} loadRatio={latest?.loadRatio} scope="Partidos" />
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
         <KPI label="Partidos" value={matches.length} color={C.accent} />
         <KPI label="HID/min avg" value={avg("hidMin")} unit="m/min" color={C.orange} />
         <KPI label="Intensidad avg" value={avg("intensity")} unit="m/min" color={C.accent} />
-        <KPI label="ACWR (último)" value={latest?.acwr} color={acwrColor(latest?.acwr)} sub={acwrLabel(latest?.acwr)} />
+        <KPI label="ACWR parcial partidos" value={latest?.acwr} color={acwrColor(latest?.acwr)} sub={acwrLabel(latest?.acwr)} />
         <KPI label="Load Ratio (últ)" value={latest?.loadRatio} color={loadRatioColor(latest?.loadRatio)} sub={loadRatioLabel(latest?.loadRatio)} />
       </div>
 
-      <ST>ACWR — ACUTE:CHRONIC WORKLOAD RATIO (cálculo por fecha real)</ST>
+      <ST>ACWR PARCIAL — solo partidos (ver banner superior para ACWR REAL)</ST>
       <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
         <Badge color={C.amber} label="Underload &lt;0.8" />
         <Badge color={C.green} label="Óptimo 0.8–1.3" />
@@ -414,89 +507,137 @@ function MatchesTab({ matches }) {
   );
 }
 
-const TRAINING_KEY = "mfc_training_v4";
-const SEED = [
-  { date: "Mar 31", dateObj: new Date("2026-03-31"), rawDate: "2026-03-31", type: "Training", mins: 89, totalDist: 4201, intensity: 79, hid: 366, hidMin: 4.11, sprints: 4, maxSpeed: 6.01, rpe: 6, load: 534, z1: 11, z2: 29, z3: 29, z4: 16, z5: 4 },
-  { date: "Abr 1", dateObj: new Date("2026-04-01"), rawDate: "2026-04-01", type: "Training", mins: 91, totalDist: 6639, intensity: 73, hid: 1163, hidMin: 13.0, sprints: 21, maxSpeed: 7.75, rpe: 8, load: 728, z1: 23, z2: 18, z3: 25, z4: 17, z5: 8 },
-  { date: "Abr 7", dateObj: new Date("2026-04-07"), rawDate: "2026-04-07", type: "Training", mins: 82, totalDist: 3536, intensity: 43, hid: 339, hidMin: 4.13, sprints: 5, maxSpeed: 6.23, rpe: 6.5, load: 533, z1: 22, z2: 30, z3: 17, z4: 10, z5: 4 },
+// SEED training — fallback cuando WEEKPRACTICE_LOG CSV no esté disponible
+const TRAINING_SEED = [
+  { source: "training", date: "Mar 31", dateObj: new Date("2026-03-31"), rawDate: "2026-03-31", type: "Training", mins: 89, totalDist: 4201, intensity: 79, hid: 366, hidMin: 4.11, sprints: 4, maxSpeed: 6.01, rpe: 6, load: 534, z1: 11, z2: 29, z3: 29, z4: 16, z5: 4, accel: 0, decel: 0, avgHR: 0, maxHR: 0 },
+  { source: "training", date: "Abr 1", dateObj: new Date("2026-04-01"), rawDate: "2026-04-01", type: "Training", mins: 91, totalDist: 6639, intensity: 73, hid: 1163, hidMin: 13.0, sprints: 21, maxSpeed: 7.75, rpe: 8, load: 728, z1: 23, z2: 18, z3: 25, z4: 17, z5: 8, accel: 0, decel: 0, avgHR: 0, maxHR: 0 },
+  { source: "training", date: "Abr 7", dateObj: new Date("2026-04-07"), rawDate: "2026-04-07", type: "Training", mins: 82, totalDist: 3536, intensity: 43, hid: 339, hidMin: 4.13, sprints: 5, maxSpeed: 6.23, rpe: 6.5, load: 533, z1: 22, z2: 30, z3: 17, z4: 10, z5: 4, accel: 45, decel: 28, avgHR: 129, maxHR: 187 },
 ];
 
-function TrainingForm({ onAdd }) {
-  const [f, setF] = useState({ date: "", mins: 70, totalDist: "", intensity: "", hid: "", sprints: "", maxSpeed: "", rpe: 6 });
+// ───── TRAINING FORM — ahora genera línea TAB para pegar en Sheet ─────────
+function TrainingLineGenerator() {
+  const [f, setF] = useState({
+    date: "", weekStart: "", day: "", type: "Training", name: "",
+    mins: 70, hid: "", totalDist: "", intensity: "",
+    hsr: "", sprints: "", accel: "", decel: "", maxSpeed: "",
+    rpe: 6, avgHR: "", maxHR: "",
+    z1: "", z2: "", z3: "", z4: "", z5: ""
+  });
   const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+
   const field = (key, lbl, type = "number", step = "1") => (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       <label style={{ color: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace", letterSpacing: 1 }}>{lbl}</label>
       <input type={type} step={step} value={f[key]} onChange={e => setF(p => ({ ...p, [key]: e.target.value }))} />
     </div>
   );
-  const submit = () => {
-    if (!f.date || !f.totalDist) return;
-    const rpe = parseInt(f.rpe), mins = parseFloat(f.mins), hid = parseFloat(f.hid) || 0;
-    const load = Math.round(mins * rpe);
-    const rawDate = f.date, dateObj = parseDate(rawDate);
-    onAdd({ ...f, type: "Training", rawDate, dateObj, date: formatDate(rawDate), mins, totalDist: parseFloat(f.totalDist), intensity: parseFloat(f.intensity) || 0, hid, hidMin: hid && mins ? parseFloat((hid / mins).toFixed(2)) : null, sprints: parseFloat(f.sprints) || 0, maxSpeed: parseFloat(f.maxSpeed) || 0, rpe, load });
-    setF({ date: "", mins: 70, totalDist: "", intensity: "", hid: "", sprints: "", maxSpeed: "", rpe: 6 });
-    setOpen(false);
+
+  const genLine = () => {
+    const mins = parseFloat(f.mins) || 0;
+    const hid = parseFloat(f.hid) || 0;
+    const hidMin = mins && hid ? (hid / mins).toFixed(2) : "";
+    const z4z5 = (parseFloat(f.z4) || 0) + (parseFloat(f.z5) || 0);
+    // Orden WEEKPRACTICE_LOG: A..X
+    const cols = [
+      f.date, f.weekStart, f.day, f.type, f.name,
+      f.mins, f.hid, hidMin, f.totalDist, f.intensity,
+      f.hsr, f.sprints, f.accel, f.decel, f.maxSpeed,
+      f.rpe, f.avgHR, f.maxHR,
+      f.z1, f.z2, f.z3, f.z4, f.z5, z4z5 || ""
+    ];
+    return cols.map(v => v === null || v === undefined ? "" : String(v)).join("\t");
   };
+
+  const copyLine = () => {
+    const line = genLine();
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(line).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2500);
+      });
+    }
+  };
+
   return (
     <div style={{ marginBottom: 20 }}>
       <button onClick={() => setOpen(o => !o)} style={{ background: open ? "transparent" : C.accent, color: open ? C.dim : "#000", border: `1px solid ${open ? C.border : C.accent}`, borderRadius: 7, padding: "8px 18px", fontFamily: "'Space Mono', monospace", fontSize: 11, cursor: "pointer" }}>
-        {open ? "✕ Cancelar" : "+ Registrar sesión"}
+        {open ? "✕ Cerrar" : "+ Generar línea TAB para WEEKPRACTICE_LOG"}
       </button>
       {open && (
         <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, marginTop: 12 }}>
-          <p style={{ color: C.accent, fontFamily: "'Space Mono', monospace", fontSize: 10, marginBottom: 14, letterSpacing: 2 }}>NUEVA SESIÓN</p>
+          <p style={{ color: C.accent, fontFamily: "'Space Mono', monospace", fontSize: 10, marginBottom: 6, letterSpacing: 2 }}>GENERAR LÍNEA PARA SHEET · WEEKPRACTICE_LOG · COLUMNAS A→X</p>
+          <p style={{ color: C.dim, fontFamily: "'Space Mono', monospace", fontSize: 9, marginBottom: 14 }}>
+            Los entrenamientos viven en el Sheet (fuente única). Llena los campos, copia la línea, pega en la siguiente fila vacía de WEEKPRACTICE_LOG (Ctrl+V en celda A[fila]).
+          </p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 12 }}>
-            {field("date", "Fecha", "date")}
-            {field("mins", "Minutos")}
-            {field("totalDist", "Dist total (m)")}
-            {field("intensity", "Intensidad (m/min)")}
-            {field("hid", "HID (m)")}
-            {field("sprints", "Sprints (#)")}
-            {field("maxSpeed", "Max Speed (m/s)", "number", "0.01")}
+            {field("date", "A · Session Date", "date")}
+            {field("weekStart", "B · Week Start", "date")}
+            {field("day", "C · Day (Mon/Tue...)", "text")}
+            {field("type", "D · Type", "text")}
+            {field("name", "E · Name", "text")}
+            {field("mins", "F · Minutes")}
+            {field("hid", "G · HID")}
+            {field("totalDist", "I · Total Dist")}
+            {field("intensity", "J · Intensity")}
+            {field("hsr", "K · HSR")}
+            {field("sprints", "L · Sprints")}
+            {field("accel", "M · Accel")}
+            {field("decel", "N · Decel")}
+            {field("maxSpeed", "O · Max Speed", "number", "0.01")}
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <label style={{ color: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace", letterSpacing: 1 }}>RPE (1–10)</label>
-              <input type="range" min={1} max={10} value={f.rpe} onChange={e => setF(p => ({ ...p, rpe: e.target.value }))} />
+              <label style={{ color: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace", letterSpacing: 1 }}>P · RPE (1–10)</label>
+              <input type="range" min={1} max={10} step="0.5" value={f.rpe} onChange={e => setF(p => ({ ...p, rpe: e.target.value }))} />
               <span style={{ color: C.accent, fontFamily: "'Space Mono', monospace", fontSize: 13, fontWeight: 700 }}>{f.rpe} / 10</span>
             </div>
+            {field("avgHR", "Q · Avg HR")}
+            {field("maxHR", "R · Max HR")}
+            {field("z1", "S · Z1 min")}
+            {field("z2", "T · Z2 min")}
+            {field("z3", "U · Z3 min")}
+            {field("z4", "V · Z4 min")}
+            {field("z5", "W · Z5 min")}
           </div>
-          <button onClick={submit} style={{ marginTop: 16, background: C.green, color: "#000", border: "none", borderRadius: 8, padding: "9px 24px", fontFamily: "'Space Mono', monospace", fontSize: 11, cursor: "pointer", fontWeight: 700 }}>Guardar sesión</button>
+          <div style={{ marginTop: 18, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: "10px 12px" }}>
+            <p style={{ color: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace", letterSpacing: 2, marginBottom: 6 }}>LÍNEA GENERADA</p>
+            <p style={{ color: C.text, fontFamily: "'Space Mono', monospace", fontSize: 10, wordBreak: "break-all" }}>{genLine()}</p>
+          </div>
+          <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
+            <button onClick={copyLine} style={{ background: copied ? C.green : C.accent, color: "#000", border: "none", borderRadius: 8, padding: "10px 22px", fontFamily: "'Space Mono', monospace", fontSize: 11, cursor: "pointer", fontWeight: 700 }}>
+              {copied ? "✓ COPIADO — pega en WEEKPRACTICE_LOG" : "📋 Copiar línea TAB"}
+            </button>
+            <a href={`https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit`} target="_blank" rel="noopener" style={{ background: "transparent", color: C.accent, border: `1px solid ${C.accent}`, borderRadius: 8, padding: "10px 22px", fontFamily: "'Space Mono', monospace", fontSize: 11, textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
+              Abrir Sheet →
+            </a>
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-function TrainingTab({ sessions, onAdd }) {
+function TrainingTab({ sessions, liveFromSheet }) {
   const withACWR = useMemo(() => computeACWR(sessions), [sessions]);
   const latest = withACWR[withACWR.length - 1];
   const avg = arr => arr.filter(Boolean).length ? +(arr.filter(Boolean).reduce((a, b) => a + b, 0) / arr.filter(Boolean).length).toFixed(2) : null;
   const totalLoad = sessions.reduce((a, s) => a + s.load, 0);
-  if (!sessions.length) return <div><TrainingForm onAdd={onAdd} /><div style={{ textAlign: "center", padding: "60px 0", color: C.dim, fontFamily: "'Space Mono', monospace", fontSize: 12 }}>No hay sesiones.<br /><span style={{ color: C.accent }}>Registra la primera sesión arriba</span></div></div>;
+  if (!sessions.length) return <div><TrainingLineGenerator /><div style={{ textAlign: "center", padding: "60px 0", color: C.dim, fontFamily: "'Space Mono', monospace", fontSize: 12 }}>No hay sesiones.<br /><span style={{ color: C.accent }}>Genera la primera línea arriba y pégala al Sheet</span></div></div>;
   return (
     <div>
-      <TrainingForm onAdd={onAdd} />
-      <AlertBar acwr={latest?.acwr} />
-      {latest?.acwr && (
-        <div style={{ background: C.panel, border: `2px solid ${acwrColor(latest.acwr)}`, borderRadius: 12, padding: "14px 20px", display: "flex", alignItems: "center", gap: 16, marginBottom: 20 }}>
-          <div style={{ width: 44, height: 44, borderRadius: "50%", background: acwrColor(latest.acwr) + "22", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <span style={{ color: acwrColor(latest.acwr), fontSize: 20, fontWeight: 900 }}>{latest.acwr > 1.5 ? "!" : latest.acwr < 0.8 ? "↓" : "✓"}</span>
-          </div>
-          <div>
-            <p style={{ color: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace", letterSpacing: 2 }}>ACWR ACTUAL</p>
-            <p style={{ color: acwrColor(latest.acwr), fontSize: 28, fontWeight: 900, fontFamily: "'Syne', sans-serif" }}>{latest.acwr} <span style={{ fontSize: 13, fontWeight: 400 }}>{acwrLabel(latest.acwr)}</span></p>
-            <p style={{ color: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace", marginTop: 4 }}>Carga aguda 7d: {latest.acuteLoad} UA · Crónica 28d: {latest.chronicLoad} UA</p>
-          </div>
+      <TrainingLineGenerator />
+      {!liveFromSheet && (
+        <div style={{ background: C.amber + "15", border: `1px solid ${C.amber}55`, borderRadius: 8, padding: "10px 14px", marginBottom: 14, color: C.amber, fontFamily: "'Space Mono', monospace", fontSize: 10 }}>
+          ⚠ Training data viene del SEED embebido. Para leer en vivo desde WEEKPRACTICE_LOG, configurar TRAINING_GID en index.html.
         </div>
       )}
+      <AlertBar acwr={latest?.acwr} scope="Training" />
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
         <KPI label="Sesiones" value={sessions.length} color={C.accent} />
         <KPI label="Max Speed avg" value={avg(sessions.map(s => s.maxSpeed))} unit="m/s" color={C.green} />
         <KPI label="HID avg" value={avg(sessions.map(s => s.hid))} unit="m" color={C.orange} />
         <KPI label="Carga total" value={totalLoad} unit="UA" color={C.amber} sub="RPE × min" />
       </div>
-      <ST>ACWR — TRAINING (fecha real)</ST>
+      <ST>ACWR PARCIAL — solo training (ver banner superior para ACWR REAL)</ST>
       <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
         <Badge color={C.amber} label="Underload" /><Badge color={C.green} label="Óptimo" /><Badge color={C.amber} label="Precaución" /><Badge color={C.red} label="Overload" />
       </div>
@@ -524,7 +665,7 @@ function TrainingTab({ sessions, onAdd }) {
       <ST>LOG DE SESIONES</ST>
       <div style={{ overflowX: "auto" }}>
         <table>
-          <thead><tr>{["Fecha","Min","Dist","HID","HID/min","Sprints","Max Spd","RPE","Carga","ACWR","Estado"].map(h => <th key={h}>{h}</th>)}</tr></thead>
+          <thead><tr>{["Fecha","Min","Dist","HID","HID/min","Sprints","Max Spd","RPE","AvgHR","Carga","ACWR","Estado"].map(h => <th key={h}>{h}</th>)}</tr></thead>
           <tbody>
             {withACWR.map((s, i) => {
               const col = acwrColor(s.acwr);
@@ -538,6 +679,7 @@ function TrainingTab({ sessions, onAdd }) {
                   <td style={{ color: C.text }}>{s.sprints}</td>
                   <td style={{ color: C.green }}>{s.maxSpeed}</td>
                   <td style={{ color: C.text }}>{s.rpe}</td>
+                  <td style={{ color: C.blue }}>{s.avgHR || "—"}</td>
                   <td style={{ color: C.amber }}>{s.load}</td>
                   <td style={{ color: col, fontWeight: 700 }}>{s.acwr ?? "—"}</td>
                   <td style={{ color: col }}>{acwrLabel(s.acwr)}</td>
@@ -551,7 +693,206 @@ function TrainingTab({ sessions, onAdd }) {
   );
 }
 
-// MATCH_SEED: datos reales del Sheet — fallback cuando CSV export falla (offline / Sheet no público)
+// ───── RECOVERY TAB ────────────────────────────────────────────────────────
+// Protocolos basados en ACWR unificado y días desde último partido
+function recoveryProtocol(acwr, daysSinceMatch) {
+  const a = acwr ?? 1.0;
+  const matchToday = daysSinceMatch === 0;
+  const matchYest  = daysSinceMatch === 1;
+
+  // Rhino Performance — botas piernas
+  let rhino;
+  if (matchToday || matchYest) rhino = { pressure: 40, time: 25, timing: "Post-partido inmediato", mode: "Sequential (drenaje)", note: "Ventana 0-24h post-partido: prioridad drenaje linfático." };
+  else if (a > 1.5) rhino = { pressure: 40, time: 30, timing: "AM + PM", mode: "Sequential", note: "ACWR overload: 2 sesiones diarias hasta bajar a <1.3." };
+  else if (a > 1.3) rhino = { pressure: 35, time: 25, timing: "Post-entreno", mode: "Sequential", note: "Precaución: uso diario post-sesión." };
+  else if (a < 0.8) rhino = { pressure: 25, time: 15, timing: "Mantenimiento PM", mode: "Sequential", note: "Underload: uso ligero solo para circulación." };
+  else rhino = { pressure: 30, time: 20, timing: "Post-entreno si RPE≥6", mode: "Sequential", note: "ACWR óptimo: uso condicional." };
+
+  // Kit Brazos Presoterapia PRO 3
+  let arms;
+  if (matchToday || matchYest) arms = { pressure: 35, time: 15, timing: "Post-partido o noche", note: "Uso ligero post-partido si hubo muchos tiros/portería o trabajo de brazos." };
+  else if (a > 1.3) arms = { pressure: 35, time: 20, timing: "Post-gym push-pull", note: "Solo los días de gym con trabajo de tren superior." };
+  else arms = { pressure: 30, time: 15, timing: "Post-gym", note: "Mantenimiento — útil los días de push-pull o pull-ups." };
+
+  // Bañera de hielo XL (cold plunge)
+  let ice;
+  if (matchToday || matchYest) ice = { tempC: "10–13", time: "8–12 min", timing: "Entre 30 min y 2h post-partido", note: "Post-partido recuperación aguda. Respetar ventana: si es <30 min después, reduce adaptación (anti-inflamatorio fuerte)." };
+  else if (a > 1.5) ice = { tempC: "10–12", time: "10 min", timing: "PM, 4h+ tras último entreno", note: "Overload: uso diario para controlar inflamación sistémica." };
+  else if (a > 1.3) ice = { tempC: "12–14", time: "8 min", timing: "Noche post-sesión alta", note: "Precaución: uso en días con carga específica alta." };
+  else if (a < 0.8) ice = { tempC: "14–16", time: "5 min", timing: "Opcional, mañana", note: "Underload: uso recreativo, no diario (no interrumpir adaptación de base)." };
+  else ice = { tempC: "12–14", time: "6–8 min", timing: "Pre-sueño, 2-3x semana", note: "Óptimo: uso moderado — NO dentro de 4h post-entreno si buscas adaptación de fuerza." };
+
+  return { rhino, arms, ice };
+}
+
+function ToolCard({ title, subtitle, color, protocol, icon }) {
+  return (
+    <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderLeft: `4px solid ${color}`, borderRadius: 10, padding: "16px 18px", flex: 1, minWidth: 280 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+        <span style={{ fontSize: 22 }}>{icon}</span>
+        <div>
+          <p style={{ color, fontFamily: "'Space Mono', monospace", fontSize: 10, letterSpacing: 2, textTransform: "uppercase" }}>{title}</p>
+          <p style={{ color: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace" }}>{subtitle}</p>
+        </div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "5px 12px", fontFamily: "'Space Mono', monospace", fontSize: 11 }}>
+        {Object.entries(protocol).filter(([k]) => k !== "note").map(([k, v]) => (
+          <React.Fragment key={k}>
+            <span style={{ color: C.dim, textTransform: "uppercase", fontSize: 9, letterSpacing: 1 }}>{k}</span>
+            <span style={{ color: C.text }}>{typeof v === "number" ? (k === "pressure" ? `${v} mmHg` : k === "time" ? `${v} min` : v) : v}</span>
+          </React.Fragment>
+        ))}
+      </div>
+      {protocol.note && <p style={{ color: C.dim, fontSize: 10, fontFamily: "'Space Mono', monospace", marginTop: 10, borderTop: `1px solid ${C.border}`, paddingTop: 8, lineHeight: 1.5 }}>{protocol.note}</p>}
+    </div>
+  );
+}
+
+function ReportBlock({ title, body, color }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(body).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      });
+    }
+  };
+  return (
+    <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderLeft: `3px solid ${color}`, borderRadius: 8, padding: "14px 16px", marginBottom: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <p style={{ color, fontFamily: "'Space Mono', monospace", fontSize: 10, letterSpacing: 2, textTransform: "uppercase" }}>{title}</p>
+        <button onClick={copy} style={{ background: copied ? C.green : "transparent", color: copied ? "#000" : C.dim, border: `1px solid ${copied ? C.green : C.border}`, borderRadius: 5, padding: "4px 10px", fontSize: 9, fontFamily: "'Space Mono', monospace", cursor: "pointer" }}>
+          {copied ? "✓ Copiado" : "📋 Copiar"}
+        </button>
+      </div>
+      <pre style={{ color: C.text, fontFamily: "'Space Mono', monospace", fontSize: 10.5, whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{body}</pre>
+    </div>
+  );
+}
+
+const COACH_K_REPORT = `*Mateo Favela — Weekly Load Report*
+*Week: Apr 7-12, 2026*
+
+*This week:*
+1 training (Tue) + 2 matches (back-to-back Sat-Sun)
+Total load: 1,645 AU across 3 sessions
+
+*Match results:*
+• Apr 11 vs Strikers FC — D 2-2
+  83 min, high intensity (HID 1426m), RPE 8
+• Apr 12 vs RSL Arizona — W 2-1
+  56 min, solid output (HID 790m), RPE 8
+
+*Load status heading into next week:*
+🟠 ELEVATED ██████░░░░
+
+Back-to-back weekend (139 competitive min) pushed weekly load above average. Not in overload — his speed actually improved Day 2 (7.59 m/s, season high). But sustained high-intensity work dropped 18% from Sat to Sun, which is expected after consecutive matches.
+
+*Key metric to watch:*
+Deceleration count exceeded accelerations both days (66/45 Sat, 49/40 Sun). This pattern across consecutive matches increases posterior muscle strain. Worth monitoring at training this week.
+
+*Next opponent:* Phoenix Rising FC (Apr 18) — mid-tier, moderate expected intensity.`;
+
+const LUIS_REPORT = `*Recomendaciones para Luis Trujillo*
+*Semana: Apr 7–12, 2026*
+
+*Estado muscular post-partido:*
+Carga acumulada: 1,645 UA en 3 sesiones (1 entreno + 2 partidos back-to-back)
+Minutos competitivos fin de semana: 139 min (83 + 56)
+
+*Patrón Decel/Accel — señal importante:*
+Sábado vs Strikers: 66 decel / 45 accel
+Domingo vs RSL Arizona: 49 decel / 40 accel
+→ Deceleraciones superan aceleraciones ambos días. Esto sobrecarga isquiotibiales y aductores bilateralmente. Prioridad #1 esta semana.
+
+*Intensidad cardíaca:*
+Sábado: RPE 8, velocidad máx 7.25 m/s
+Domingo: RPE 8, velocidad máx 7.59 m/s (récord de temporada)
+La velocidad subió el día 2 = sin fatiga neuromuscular aguda. Pero el HID/min bajó 18% (17.2→14.1), señal de fatiga metabólica acumulada.
+
+*Sesión del lunes (masaje + evaluación):*
+• Priorizar: isquiotibiales bilateral + aductores
+• Buscar: tensión en cadena posterior, especialmente inserción proximal de isquios y aductores mediales
+• Revisar: gemelos y sóleo — 139 min en 2 días con deceleraciones altas los carga también
+
+*Trabajo de fuerza funcional esta semana:*
+• Nordic hamstring curls: 3×5 — proteger isquios ante patrón decel repetido
+• Copenhagen adductor: 3×8 cada lado — reforzar aductores que absorben las frenadas
+• Single-leg RDL con peso ligero: 3×8 — activación cadena posterior sin impacto
+• Evitar: sprints máximos en los primeros 2 días de la semana. Que los haga miércoles en adelante si el coach los programa.
+
+*Objetivo de la semana:*
+Recuperar cadena posterior sin perder explosividad. Próximo rival: Phoenix Rising FC (Apr 18), intensidad media — hay margen para llegar bien.`;
+
+function RecoveryTab({ unified, daysSinceMatch, allSessions }) {
+  const proto = recoveryProtocol(unified?.acwr, daysSinceMatch);
+  const col = acwrColor(unified?.acwr);
+
+  // Carga semanal (últimos 7d) desglose partidos vs entrenos
+  const now = new Date();
+  const last7 = allSessions.filter(s => s.dateObj && (now - s.dateObj) / 86400000 < 7);
+  const matchLoad7 = last7.filter(s => s.source === "match").reduce((a, x) => a + x.load, 0);
+  const trainLoad7 = last7.filter(s => s.source === "training").reduce((a, x) => a + x.load, 0);
+
+  return (
+    <div>
+      <div style={{ background: C.panel, border: `2px solid ${col}`, borderRadius: 12, padding: "16px 20px", marginBottom: 20, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+        <div>
+          <p style={{ color: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace", letterSpacing: 2 }}>PRESCRIPCIÓN SEMANAL · basada en ACWR REAL</p>
+          <p style={{ color: col, fontSize: 24, fontWeight: 800, fontFamily: "'Syne'", marginTop: 4 }}>{unified?.acwr ?? "—"} <span style={{ fontSize: 12, fontWeight: 400 }}>{acwrLabel(unified?.acwr)}</span></p>
+          <p style={{ color: C.dim, fontSize: 10, fontFamily: "'Space Mono'", marginTop: 3 }}>
+            {daysSinceMatch != null ? `${daysSinceMatch}d desde último partido` : "—"} ·
+            7d: {matchLoad7} UA partidos + {trainLoad7} UA training
+          </p>
+        </div>
+      </div>
+
+      <ST>PROTOCOLOS DE RECUPERACIÓN — 3 HERRAMIENTAS</ST>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <ToolCard
+          title="Rhino Performance — Piernas"
+          subtitle="Presoterapia legs · drenaje linfático"
+          color={C.accent}
+          protocol={proto.rhino}
+          icon="🦵"
+        />
+        <ToolCard
+          title="Kit Brazos Presoterapia PRO 3"
+          subtitle="Presoterapia brazos · circulación tren superior"
+          color={C.orange}
+          protocol={proto.arms}
+          icon="💪"
+        />
+        <ToolCard
+          title="Bañera de Hielo XL"
+          subtitle="Cold plunge 119 gal · contraste térmico"
+          color={C.blue}
+          protocol={proto.ice}
+          icon="🧊"
+        />
+      </div>
+
+      <ST>REGLAS CLAVE DE USO</ST>
+      <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: "14px 18px", fontFamily: "'Space Mono', monospace", fontSize: 11, color: C.text, lineHeight: 1.7 }}>
+        <p>· <span style={{ color: C.accent }}>Cold plunge NO dentro de 4h post-entreno de fuerza</span> — interrumpe síntesis proteica e hipertrofia.</p>
+        <p>· <span style={{ color: C.accent }}>Presoterapia piernas es segura a cualquier hora</span> — se puede combinar post-ice o post-entreno.</p>
+        <p>· <span style={{ color: C.accent }}>Post-partido ventana 0-30 min</span>: presoterapia SÍ, ice bath NO (espera 30+ min).</p>
+        <p>· <span style={{ color: C.accent }}>Back-to-back</span>: presoterapia piernas + ice entre partidos = +15% recuperación HID al día 2.</p>
+        <p>· <span style={{ color: C.accent }}>Recovery nunca reemplaza sueño</span> — prioridad 8-9h para un U14 en alta carga.</p>
+      </div>
+
+      <ST>REPORTES DE LA SEMANA — PARA WHATSAPP</ST>
+      <p style={{ color: C.dim, fontSize: 10, fontFamily: "'Space Mono', monospace", marginBottom: 10 }}>
+        Mensajes preformateados para Coach K (training) y Luis Trujillo (PT). Click "Copiar" y pega en WhatsApp.
+      </p>
+      <ReportBlock title="Coach K — weekly report (EN)" body={COACH_K_REPORT} color={C.green} />
+      <ReportBlock title="Luis Trujillo — recomendaciones PT (ES)" body={LUIS_REPORT} color={C.orange} />
+    </div>
+  );
+}
+
+// ───── MATCH_SEED — fallback offline ──────────────────────────────────────
 const MATCH_SEED = [
   {"Date":"2026-02-21","Opponent":"Total Futbol Academy","Opponent Tier":"Elite","Minutes Played":"70","Total Distance (m)":"4970","Intensity (m/min)":"71","HID (m)":"1106","Work Rate (%)":"","Sprint Distance (m)":"565","HSR (m)":"","Sprints (#)":"","Accelerations (#)":"","Decelerations (#)":"","Max Speed (m/s)":"","RPE (1-10)":"5","Result":"","Position":"CM","Goals":"0","Assists":"0"},
   {"Date":"2026-02-22","Opponent":"Santa Barbara Soccer Club","Opponent Tier":"Low","Minutes Played":"70","Total Distance (m)":"4060","Intensity (m/min)":"58","HID (m)":"859","Work Rate (%)":"","Sprint Distance (m)":"233","HSR (m)":"","Sprints (#)":"","Accelerations (#)":"","Decelerations (#)":"","Max Speed (m/s)":"","RPE (1-10)":"7","Result":"","Position":"CM","Goals":"0","Assists":"0"},
@@ -561,7 +902,7 @@ const MATCH_SEED = [
   {"Date":"2026-03-14","Opponent":"LA Galaxy","Opponent Tier":"Elite","Minutes Played":"75","Total Distance (m)":"8550","Intensity (m/min)":"114","HID (m)":"1646","Work Rate (%)":"","Sprint Distance (m)":"999","HSR (m)":"","Sprints (#)":"","Accelerations (#)":"","Decelerations (#)":"","Max Speed (m/s)":"","RPE (1-10)":"9","Result":"","Position":"CM","Goals":"0","Assists":"0"},
   {"Date":"2026-03-15","Opponent":"LA Surf","Opponent Tier":"Low","Minutes Played":"81","Total Distance (m)":"7776","Intensity (m/min)":"96","HID (m)":"946","Work Rate (%)":"","Sprint Distance (m)":"340","HSR (m)":"","Sprints (#)":"","Accelerations (#)":"","Decelerations (#)":"","Max Speed (m/s)":"","RPE (1-10)":"6","Result":"","Position":"CM","Goals":"0","Assists":"0"},
   {"Date":"2026-03-21","Opponent":"City SC Southwest","Opponent Tier":"Very Low","Minutes Played":"70","Total Distance (m)":"6650","Intensity (m/min)":"95","HID (m)":"991","Work Rate (%)":"","Sprint Distance (m)":"470","HSR (m)":"","Sprints (#)":"","Accelerations (#)":"","Decelerations (#)":"","Max Speed (m/s)":"","RPE (1-10)":"6","Result":"","Position":"CM","Goals":"0","Assists":"0"},
-  {"Date":"2026-04-04","Opponent":"FC Golden State","Opponent Tier":"Strong","Minutes Played":"80","Total Distance (m)":"7520","Intensity (m/min)":"94","HID (m)":"1186","Work Rate (%)":"","Sprint Distance (m)":"473","HSR (m)":"","Sprints (#)":"","Accelerations (#)":"","Decelerations (#)":"","Max Speed (m/s)":"","RPE (1-10)":"8","Result":"","Position":"CM","Goals":"0","Assists":"0"},
+  {"Date":"2026-04-04","Opponent":"FC Golden State","Opponent Tier":"Strong","Minutes Played":"80","Total Distance (m)":"7520","Intensity (m/min)":"94","HID (m)":"1186","Work Rate (%)":"","Sprint Distance (m)":"473","HSR (m)":"","Sprints (#)":"","Decelerations (#)":"","Max Speed (m/s)":"","RPE (1-10)":"8","Result":"","Position":"CM","Goals":"0","Assists":"0"},
   {"Date":"2026-04-11","Opponent":"Strikers FC","Opponent Tier":"Strong","Minutes Played":"83","Total Distance (m)":"8788","Intensity (m/min)":"106","HID (m)":"1426","Work Rate (%)":"70","Sprint Distance (m)":"675","HSR (m)":"231","Sprints (#)":"42","Accelerations (#)":"45","Decelerations (#)":"66","Max Speed (m/s)":"7.4","RPE (1-10)":"8","Result":"D 2-2","Position":"CM","Goals":"0","Assists":"0"},
   {"Date":"2026-04-12","Opponent":"RSL Arizona","Opponent Tier":"Strong","Minutes Played":"56","Total Distance (m)":"5242","Intensity (m/min)":"94","HID (m)":"790","Work Rate (%)":"60","Sprint Distance (m)":"255","HSR (m)":"112","Sprints (#)":"19","Accelerations (#)":"40","Decelerations (#)":"49","Max Speed (m/s)":"7.59","RPE (1-10)":"8","Result":"W 2-1","Position":"CM","Goals":"0","Assists":"0"},
 ];
@@ -570,42 +911,82 @@ function Dashboard() {
   const [tab, setTab] = useState("matches");
   const [matches, setMatches] = useState([]);
   const [training, setTraining] = useState([]);
-  const [status, setStatus] = useState("loading");
+  const [matchStatus, setMatchStatus] = useState("loading");
+  const [trainStatus, setTrainStatus] = useState("loading");
 
+  // Fetch matches
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(TRAINING_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        setTraining(parsed.map(s => ({ ...s, dateObj: s.rawDate ? new Date(s.rawDate) : null })));
-      } else {
-        setTraining(SEED);
-        localStorage.setItem(TRAINING_KEY, JSON.stringify(SEED));
-      }
-    } catch { setTraining(SEED); }
-  }, []);
-
-  useEffect(() => {
-    const url = "https://docs.google.com/spreadsheets/d/1lGBQlrUJt6Rv-YIqnBNHZ4MIHiwYgu_0vHqsC5J4ark/export?format=csv&gid=1971038813";
-    fetch(url).then(r => r.text()).then(text => {
+    fetch(csvUrl(MATCH_GID)).then(r => r.text()).then(text => {
       const rows = parseCSV(text);
       const parsed = rows.filter(r => parseFloat(r["Total Distance (m)"]) > 0).map(rowToMatch);
       setMatches(parsed);
-      setStatus("ok");
+      setMatchStatus("ok");
     }).catch(e => {
-      console.warn("CSV fetch failed, using embedded match data:", e);
+      console.warn("Match CSV fetch failed, using embedded:", e);
       setMatches(MATCH_SEED.map(rowToMatch));
-      setStatus("fallback");
+      setMatchStatus("fallback");
     });
   }, []);
 
-  const addTraining = useCallback(s => {
-    setTraining(prev => {
-      const next = [...prev, s];
-      try { localStorage.setItem(TRAINING_KEY, JSON.stringify(next)); } catch {}
-      return next;
+  // Fetch training — si TRAINING_GID está configurado, lee del Sheet; si no, SEED
+  useEffect(() => {
+    if (!TRAINING_GID) {
+      setTraining(TRAINING_SEED);
+      setTrainStatus("fallback");
+      return;
+    }
+    fetch(csvUrl(TRAINING_GID)).then(r => r.text()).then(text => {
+      const rows = parseCSV(text);
+      const parsed = rows.filter(r => {
+        const d = r["Session Date"] || r["Date"] || r["Fecha"];
+        return d && String(d).trim() !== "";
+      }).map(rowToTraining);
+      if (parsed.length) {
+        setTraining(parsed);
+        setTrainStatus("ok");
+      } else {
+        setTraining(TRAINING_SEED);
+        setTrainStatus("fallback");
+      }
+    }).catch(e => {
+      console.warn("Training CSV fetch failed, using embedded:", e);
+      setTraining(TRAINING_SEED);
+      setTrainStatus("fallback");
     });
   }, []);
+
+  // ACWR unificado
+  const allSessions = useMemo(() => {
+    const combined = [...matches, ...training].filter(s => s.dateObj && s.load > 0);
+    return combined.sort((a, b) => (a.dateObj - b.dateObj));
+  }, [matches, training]);
+
+  const unifiedACWR = useMemo(() => {
+    const ref = new Date();
+    // Pseudo-sesión "hoy" para calcular el ACWR actual sobre todas las sesiones hasta hoy
+    const hoy = { dateObj: ref, load: 0 };
+    const withHoy = [...allSessions, hoy];
+    const calc = computeACWR(withHoy);
+    return calc[calc.length - 1];
+  }, [allSessions]);
+
+  const matchOnlyACWR = useMemo(() => {
+    if (!matches.length) return null;
+    const c = computeACWR(matches);
+    return c[c.length - 1]?.acwr ?? null;
+  }, [matches]);
+
+  const trainingOnlyACWR = useMemo(() => {
+    if (!training.length) return null;
+    const c = computeACWR(training);
+    return c[c.length - 1]?.acwr ?? null;
+  }, [training]);
+
+  const daysSinceMatch = useMemo(() => {
+    const withDates = matches.filter(m => m.dateObj).sort((a, b) => b.dateObj - a.dateObj);
+    if (!withDates.length) return null;
+    return daysBetween(withDates[0].dateObj, new Date());
+  }, [matches]);
 
   const tabBtn = (id, lbl) => (
     <button onClick={() => setTab(id)} style={{ background: tab === id ? C.accent : "transparent", color: tab === id ? "#000" : C.dim, border: `1px solid ${tab === id ? C.accent : C.border}`, borderRadius: 7, padding: "8px 22px", fontFamily: "'Space Mono', monospace", fontSize: 11, cursor: "pointer", fontWeight: tab === id ? 700 : 400 }}>{lbl}</button>
@@ -613,21 +994,27 @@ function Dashboard() {
 
   return (
     <div style={{ background: C.bg, minHeight: "100vh", color: C.text, padding: "28px 28px 60px", maxWidth: 1140, margin: "0 auto" }}>
-      <div style={{ marginBottom: 28, borderBottom: `1px solid ${C.border}`, paddingBottom: 20 }}>
+      <div style={{ marginBottom: 24, borderBottom: `1px solid ${C.border}`, paddingBottom: 20 }}>
         <p style={{ color: C.accent, fontSize: 9, fontFamily: "'Space Mono', monospace", letterSpacing: 4, textTransform: "uppercase", marginBottom: 6 }}>MLS NEXT · CHULA VISTA FC · U14 SW · 2026</p>
         <h1 style={{ fontSize: 40, fontWeight: 800, letterSpacing: -1, lineHeight: 1, color: "#f1f5f9", fontFamily: "'Syne', sans-serif" }}>
           MATEO <span style={{ color: C.accent }}>GPS PERFORMANCE</span>
         </h1>
-        <p style={{ color: C.dim, fontSize: 11, marginTop: 6, fontFamily: "'Space Mono', monospace" }}>#6 / #8 · StatSports GPS · v4.0 — ACWR fecha real · MDI · Load Ratio · U14 calibrated tiers</p>
+        <p style={{ color: C.dim, fontSize: 11, marginTop: 6, fontFamily: "'Space Mono', monospace" }}>#6 / #8 · StatSports GPS · v5.0 — ACWR unificado · Recovery protocols · Sheet-native training</p>
       </div>
-      {status === "fallback" && <div style={{ background: "#0a1a10", border: `1px solid ${C.amber}44`, borderRadius: 8, padding: "10px 16px", marginBottom: 16, color: C.amber, fontFamily: "'Space Mono', monospace", fontSize: 11 }}>Modo offline — datos embebidos (última sync). Para datos en vivo, el Sheet debe ser público.</div>}
-      <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
+
+      <UnifiedACWRBanner unified={unifiedACWR} matchOnly={matchOnlyACWR} trainingOnly={trainingOnlyACWR} daysSinceMatch={daysSinceMatch} />
+
+      {matchStatus === "fallback" && <div style={{ background: "#0a1a10", border: `1px solid ${C.amber}44`, borderRadius: 8, padding: "10px 16px", marginBottom: 16, color: C.amber, fontFamily: "'Space Mono', monospace", fontSize: 11 }}>Partidos: modo offline — datos embebidos. Para datos en vivo, el Sheet debe ser público.</div>}
+
+      <div style={{ display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" }}>
         {tabBtn("matches", `Partidos (${matches.length})`)}
         {tabBtn("training", `Training (${training.length})`)}
+        {tabBtn("recovery", "Recovery")}
       </div>
       {tab === "matches" && <MatchesTab matches={matches} />}
-      {tab === "training" && <TrainingTab sessions={training} onAdd={addTraining} />}
-      <p style={{ color: C.muted, fontSize: 9, fontFamily: "'Space Mono', monospace", textAlign: "center", marginTop: 50, letterSpacing: 2 }}>MATEO · CHULA VISTA FC · MLS NEXT U14 SW · 2026 · v4.0</p>
+      {tab === "training" && <TrainingTab sessions={training} liveFromSheet={trainStatus === "ok"} />}
+      {tab === "recovery" && <RecoveryTab unified={unifiedACWR} daysSinceMatch={daysSinceMatch} allSessions={allSessions} />}
+      <p style={{ color: C.muted, fontSize: 9, fontFamily: "'Space Mono', monospace", textAlign: "center", marginTop: 50, letterSpacing: 2 }}>MATEO · CHULA VISTA FC · MLS NEXT U14 SW · 2026 · v5.0</p>
     </div>
   );
 }
