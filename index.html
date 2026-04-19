@@ -106,7 +106,8 @@ function parseCSV(text) {
   });
 }
 
-// Parser robusto — maneja ISO, US, europeo, y español corto sin TZ shift
+// Parser robusto — maneja ISO, US, europeo, español e inglés (corto/largo) sin TZ shift
+// iOS Safari es estricto con new Date(string) — por eso NO dependemos del fallback.
 function parseDate(raw) {
   if (!raw) return null;
   const s = String(raw).trim();
@@ -127,17 +128,40 @@ function parseDate(raw) {
   m = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
   if (m) return new Date(+m[3], +m[2] - 1, +m[1]);
 
-  // Español corto: "16 abr", "16 abr 2026", "16 de abril 2026"
-  const MESES = { ene:0, feb:1, mar:2, abr:3, may:4, jun:5, jul:6, ago:7, sep:8, oct:9, nov:10, dic:11,
-                  enero:0, febrero:1, marzo:2, abril:3, mayo:4, junio:5, julio:6, agosto:7,
-                  septiembre:8, octubre:9, noviembre:10, diciembre:11 };
-  m = s.toLowerCase().match(/^(\d{1,2})(?:\s+de)?\s+([a-záéíóú]+)(?:\s+(\d{4}))?/);
+  // Meses ES + EN (corto y largo). Keys en lowercase, sin acentos problemáticos.
+  // "mar", "may", "sep", "oct", "nov" coinciden en ambos idiomas.
+  const MESES = {
+    // Español corto
+    ene:0, feb:1, mar:2, abr:3, may:4, jun:5, jul:6, ago:7, sep:8, oct:9, nov:10, dic:11,
+    // Español largo
+    enero:0, febrero:1, marzo:2, abril:3, mayo:4, junio:5, julio:6, agosto:7,
+    septiembre:8, octubre:9, noviembre:10, diciembre:11,
+    // Inglés corto (los únicos nuevos vs ES: jan, apr, aug, sept, dec)
+    jan:0, apr:3, aug:7, sept:8, dec:11,
+    // Inglés largo
+    january:0, february:1, march:2, april:3, june:5, july:6, august:7,
+    september:8, october:9, november:10, december:11
+  };
+
+  // Acepta separador espacio O guion: "1 Apr", "31-mar", "16 de abril 2026", "7 Apr 2026"
+  m = s.toLowerCase().match(/^(\d{1,2})[\s-]+(?:de[\s-]+)?([a-záéíóú]+)\.?(?:[\s,-]+(\d{2,4}))?$/);
   if (m && MESES[m[2]] !== undefined) {
-    const y = m[3] ? +m[3] : new Date().getFullYear();
+    let y;
+    if (m[3]) { y = +m[3]; if (y < 100) y += 2000; }
+    else       { y = new Date().getFullYear(); }
     return new Date(y, MESES[m[2]], +m[1]);
   }
 
-  // Fallback último recurso
+  // Formato inverso: "Apr 7", "Apr 7, 2026", "April 7 2026"
+  m = s.toLowerCase().match(/^([a-záéíóú]+)\.?[\s-]+(\d{1,2})(?:[\s,-]+(\d{2,4}))?$/);
+  if (m && MESES[m[1]] !== undefined) {
+    let y;
+    if (m[3]) { y = +m[3]; if (y < 100) y += 2000; }
+    else       { y = new Date().getFullYear(); }
+    return new Date(y, MESES[m[1]], +m[2]);
+  }
+
+  // Fallback último recurso (iOS Safari suele fallar aquí — por eso los regex de arriba deben cubrir todo)
   const d = new Date(s);
   return isNaN(d) ? null : d;
 }
