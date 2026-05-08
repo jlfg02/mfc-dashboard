@@ -571,6 +571,9 @@ const TRAINING_SEED = [
   { source: "training", date: "Mar 31", dateObj: new Date("2026-03-31"), rawDate: "2026-03-31", type: "Training", mins: 89, totalDist: 4201, intensity: 79, hid: 366, hidMin: 4.11, sprints: 4, maxSpeed: 6.01, rpe: 6, load: 534, z1: 11, z2: 29, z3: 29, z4: 16, z5: 4, accel: 0, decel: 0, avgHR: 0, maxHR: 0 },
   { source: "training", date: "Abr 1", dateObj: new Date("2026-04-01"), rawDate: "2026-04-01", type: "Training", mins: 91, totalDist: 6639, intensity: 73, hid: 1163, hidMin: 13.0, sprints: 21, maxSpeed: 7.75, rpe: 8, load: 728, z1: 23, z2: 18, z3: 25, z4: 17, z5: 8, accel: 0, decel: 0, avgHR: 0, maxHR: 0 },
   { source: "training", date: "Abr 7", dateObj: new Date("2026-04-07"), rawDate: "2026-04-07", type: "Training", mins: 82, totalDist: 3536, intensity: 43, hid: 339, hidMin: 4.13, sprints: 5, maxSpeed: 6.23, rpe: 6.5, load: 533, z1: 22, z2: 30, z3: 17, z4: 10, z5: 4, accel: 45, decel: 28, avgHR: 129, maxHR: 187 },
+  { source: "training", date: "Abr 21", dateObj: new Date("2026-04-21"), rawDate: "2026-04-21", type: "Training", mins: 92, totalDist: 3587, intensity: 39, hid: 341, hidMin: 3.71, sprints: 1, maxSpeed: 5.99, rpe: 3, load: 276, z1: 36, z2: 18, z3: 32, z4: 7, z5: 0, accel: 48, decel: 21, avgHR: 125, maxHR: 164 },
+  { source: "training", date: "Abr 22", dateObj: new Date("2026-04-22"), rawDate: "2026-04-22", type: "Training", mins: 86, totalDist: 5047, intensity: 59, hid: 734, hidMin: 8.53, sprints: 13, maxSpeed: 8.11, rpe: 4, load: 344, z1: 34, z2: 21, z3: 26, z4: 5, z5: 1, accel: 58, decel: 51, avgHR: 127, maxHR: 183 },
+  { source: "training", date: "May 6", dateObj: new Date("2026-05-06"), rawDate: "2026-05-06", type: "Training", mins: 85, totalDist: 5093, intensity: 60, hid: 999, hidMin: 11.75, sprints: 17, maxSpeed: 7.08, rpe: 8, load: 680, z1: 50, z2: 1, z3: 12, z4: 15, z5: 7, accel: 30, decel: 34, avgHR: 158, maxHR: 188 },
 ];
 
 // ───── TRAINING FORM — ahora genera línea TAB para pegar en Sheet ─────────
@@ -866,60 +869,59 @@ function ReportBlock({ title, body, color }) {
   );
 }
 
-const COACH_K_REPORT = `*Mateo — Weekly Load Report (Apr 13–19)*
+const COACH_K_REPORT = `*Mateo — Weekly Load Report (May 4–10)*
 
-*Match performance — Apr 18 vs Phoenix Rising FC (W 4-1)*
-· 80 min played, RPE 8 (Very Hard)
-· HID 1362m @ 17.0 m/min — 31% above expected for tier
-· Max Speed 7.94 m/s — new personal best
-· 1 goal, 0 assists
-· 41 sprints, 57 accels, 67 decels
+*Most recent match — May 2 vs LA Soccer Club (W 1-0)*
+· 80 min played as #6, RPE 6
+· HID 1034m @ 12.9 m/min — exactly on tier expected
+· Max HR 197 bpm — season peak
+· 78% of match in Z4+Z5 (very high cardiac load)
+· 0 goals, 0 assists, no physical complaints
 
-*Load this week*
-· 1 match + 3 GPS-tracked training sessions (Tue/Wed/Thu)
-· Accumulated weekly load ≈ 1840 AU
-· No physical complaints post-match
-· Explosiveness intact (PB on max speed)
+*Training this week*
+· 1 GPS session so far (May 6, Wed) — high intensity
+· HID 999m, RPE 8, Max Speed 7.08 m/s
+· Mateo entered training with no restrictions, full output
 
-*Load status heading into next week*
-🔴 HIGH ████████░░
+*Load status heading into next match*
+🟢 MODERATE ████░░░░░░
 
 *Key metric to watch*
-Match ACWR ≈ 2.3 — 3rd consecutive week at high competitive density (tiers faced: Strong → Strong → Medium). Structural load is elevated even though Mateo feels good.
+Match ACWR has eased back to safe range — chronic load building from regular training. Mateo recovered fully from the Apr 11 → Apr 18 → May 2 stretch.
 
-*2nd half drop*
-HID -23%, Sprint -28% — mix of cumulative fatigue and controlled match (CVFC pushed up field in 2H, Phoenix defended deep).
+*Decel pattern across recent matches*
+Phoenix 1.18, LA SC 1.44 — sustained eccentric load both games. No symptoms reported but worth knowing.
 
 *Context for awareness*
-Sharing so you have visibility on load, not to prescribe training. Mateo has no restrictions on his end — full minutes next match are on the table from a physical standpoint.`;
+Mateo has no physical restrictions. Full minutes next match are available from a load standpoint.`;
 
-const LUIS_REPORT = `*Recomendaciones Luis Trujillo — Semana Apr 13–19, 2026*
+const LUIS_REPORT = `*Recomendaciones Luis Trujillo — Semana May 4–10, 2026*
 
-*Estado muscular post-partido Apr 18 vs Phoenix Rising (W 4-1)*
-· Carga acumulada: ~1840 UA en 5 días (1 partido + 3 entrenos GPS)
-· Decels/Accels: 67/57 = 1.18 → carga excéntrica moderada-alta
-· Z4+Z5 HR: 66 min alta intensidad cardiaca (Z5 sola: 27 min)
-· Caída 2nd half: HID -23%, Sprint -28% (mezcla fatiga + partido controlado)
-· SIN molestias reportadas. Max Speed PB 7.94 m/s.
+*Estado muscular post-LA Soccer Club (W 1-0, May 2)*
+· 80 min jugados de #6, HID 1034m (LR=1.0, justo en tier)
+· Decels/Accels: 56/39 = 1.44 → carga excéntrica ALTA
+· Cardio extremo: 78% del partido en Z4+Z5, Max HR 197 bpm (récord temporada)
+· SIN molestias reportadas
+· 4 días post-match: entreno fuerte el May 6 sin restricciones (HID 999m)
 
-*Sesión del lunes Apr 20 — masaje + evaluación*
-· Priorizar: cadena posterior (isquios bilaterales), aductores, cuádriceps
-· Buscar: tensión latente en isquios por alto conteo de decels + caída HID 2H
-· Liberación miofascial: psoas e iliaco (57 acels = alta demanda flexor cadera)
-· Movilidad tobillo: 41 sprints con múltiples cambios de dirección
+*Sesión de la semana — masaje + evaluación*
+· Priorizar: cadena posterior (isquios), aductores
+· El ratio Decel/Accel 1.44 de LA SC es el más alto de los últimos 5 partidos — vigilar tensión en semitendinoso/semimembranoso
+· Cuádriceps: 56 decels = mucha frenada, posible tensión en recto femoral
+· Liberación miofascial: psoas-iliaco (jugando de #6, alta demanda en pivote)
 
-*Trabajo de fuerza funcional esta semana (mar/mié)*
-· Nordic curls: 3×6 — protección isquios tras decels altos
+*Trabajo de fuerza funcional*
+· Nordic curls: 3×6 — protección isquios prioritaria (2 partidos con decel alto)
 · Copenhagen plank: 3×30s c/lado — refuerzo aductor preventivo
-· Single-leg RDL con mancuerna ligera: 3×8 — control excéntrico unilateral
+· Single-leg RDL: 3×8 — control excéntrico
 · Pogo jumps / bounding: 2×10 — mantener reactividad explosiva
-· Evitar esta semana: sprints máximos en plano (ya pegó PB, no forzar), cargas pesadas de squat bilateral
+· Evitar: cargas pesadas de squat bilateral esta semana
 
 *Objetivo de la semana*
-Descargar cadena posterior sin perder reactividad explosiva. Mantener umbral de velocidad punta con low-volume / high-quality. Protocolo de recuperación estándar — no necesita modo agresivo porque no hay síntomas.
+Descargar carga excéntrica acumulada (Phoenix + LA SC con ratio decel alto consecutivo) sin perder explosividad. Próximo partido en horizonte — mantener volumen low / quality high.
 
 *Señal roja si aparece*
-Si entre lunes y miércoles aparece tensión en hueco poplíteo, molestia en aductor al abrir cadera, o RPE matutino >6 sin razón → avisar a JL inmediatamente, ajustamos plan.`;
+Tensión en hueco poplíteo, molestia en aductor al abrir cadera, RPE matutino >6 sin razón → avisar a JL inmediatamente.`;
 
 function SleepBlock({ allSessions }) {
   const matchesOnly = allSessions.filter(s => s.source === "match");
@@ -1052,6 +1054,7 @@ const MATCH_SEED = [
   {"Date":"2026-04-11","Opponent":"Strikers FC","Opponent Tier":"Strong","Minutes Played":"83","Total Distance (m)":"8788","Intensity (m/min)":"106","HID (m)":"1426","Work Rate (%)":"70","Sprint Distance (m)":"675","HSR (m)":"231","Sprints (#)":"42","Accelerations (#)":"45","Decelerations (#)":"66","Max Speed (m/s)":"7.4","RPE (1-10)":"8","Result":"D 2-2","Position":"CM","Goals":"0","Assists":"0"},
   {"Date":"2026-04-12","Opponent":"RSL Arizona","Opponent Tier":"Strong","Minutes Played":"56","Total Distance (m)":"5242","Intensity (m/min)":"94","HID (m)":"790","Work Rate (%)":"60","Sprint Distance (m)":"255","HSR (m)":"112","Sprints (#)":"19","Accelerations (#)":"40","Decelerations (#)":"49","Max Speed (m/s)":"7.59","RPE (1-10)":"8","Result":"W 2-1","Position":"CM","Goals":"0","Assists":"0"},
   {"Date":"2026-04-18","Opponent":"Phoenix Rising FC","Opponent Tier":"Medium","Minutes Played":"80","Total Distance (m)":"8341","Intensity (m/min)":"104","HID (m)":"1362","Work Rate (%)":"70","Sprint Distance (m)":"591","HSR (m)":"264","Sprints (#)":"41","Accelerations (#)":"57","Decelerations (#)":"67","Max Speed (m/s)":"7.94","RPE (1-10)":"8","Result":"W 4-1","Position":"CM","Goals":"1","Assists":"0"},
+  {"Date":"2026-05-02","Opponent":"Los Angeles Soccer Club","Opponent Tier":"Medium","Minutes Played":"80","Total Distance (m)":"8278","Intensity (m/min)":"86","HID (m)":"1034","Work Rate (%)":"39","Sprint Distance (m)":"415","HSR (m)":"112","Sprints (#)":"30","Accelerations (#)":"39","Decelerations (#)":"56","Max Speed (m/s)":"6.88","RPE (1-10)":"6","Result":"W 1-0","Position":"CM","Goals":"0","Assists":"0"},
 ];
 
 function Dashboard() {
