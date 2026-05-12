@@ -574,6 +574,8 @@ const TRAINING_SEED = [
   { source: "training", date: "Abr 21", dateObj: new Date("2026-04-21"), rawDate: "2026-04-21", type: "Training", mins: 92, totalDist: 3587, intensity: 39, hid: 341, hidMin: 3.71, sprints: 1, maxSpeed: 5.99, rpe: 3, load: 276, z1: 36, z2: 18, z3: 32, z4: 7, z5: 0, accel: 48, decel: 21, avgHR: 125, maxHR: 164 },
   { source: "training", date: "Abr 22", dateObj: new Date("2026-04-22"), rawDate: "2026-04-22", type: "Training", mins: 86, totalDist: 5047, intensity: 59, hid: 734, hidMin: 8.53, sprints: 13, maxSpeed: 8.11, rpe: 4, load: 344, z1: 34, z2: 21, z3: 26, z4: 5, z5: 1, accel: 58, decel: 51, avgHR: 127, maxHR: 183 },
   { source: "training", date: "May 6", dateObj: new Date("2026-05-06"), rawDate: "2026-05-06", type: "Training", mins: 85, totalDist: 5093, intensity: 60, hid: 999, hidMin: 11.75, sprints: 17, maxSpeed: 7.08, rpe: 8, load: 680, z1: 50, z2: 1, z3: 12, z4: 15, z5: 7, accel: 30, decel: 34, avgHR: 158, maxHR: 188 },
+  { source: "training", date: "May 7", dateObj: new Date("2026-05-07"), rawDate: "2026-05-07", type: "Training", mins: 99, totalDist: 7092, intensity: 72, hid: 1023, hidMin: 10.33, sprints: 24, maxSpeed: 6.91, rpe: 5, load: 495, z1: 18, z2: 11, z3: 41, z4: 15, z5: 14, accel: 78, decel: 67, avgHR: 150, maxHR: 194 },
+  { source: "training", date: "May 11", dateObj: new Date("2026-05-11"), rawDate: "2026-05-11", type: "Training", mins: 84, totalDist: 4394, intensity: 52, hid: 716, hidMin: 8.52, sprints: 17, maxSpeed: 6.99, rpe: 7, load: 588, z1: 18, z2: 32, z3: 18, z4: 11, z5: 6, accel: 43, decel: 45, avgHR: 136, maxHR: 186 },
 ];
 
 // ───── TRAINING FORM — ahora genera línea TAB para pegar en Sheet ─────────
@@ -871,57 +873,76 @@ function ReportBlock({ title, body, color }) {
 
 const COACH_K_REPORT = `*Mateo — Weekly Load Report (May 4–10)*
 
-*Most recent match — May 2 vs LA Soccer Club (W 1-0)*
-· 80 min played as #6, RPE 6
-· HID 1034m @ 12.9 m/min — exactly on tier expected
-· Max HR 197 bpm — season peak
-· 78% of match in Z4+Z5 (very high cardiac load)
-· 0 goals, 0 assists, no physical complaints
+*Most recent match — May 9 vs LA Bulls (L 2-3)*
+· 80 min played as #6, RPE 8 (Very Hard)
+· HID 1236m @ 15.5 m/min — 19% above tier expected
+· Max Speed 7.37 m/s, 34 sprints, 59 decels
+· *1 goal from Mateo* (golazo in a losing effort)
+· Mateo reported tiredness post-match
 
-*Training this week*
-· 1 GPS session so far (May 6, Wed) — high intensity
-· HID 999m, RPE 8, Max Speed 7.08 m/s
-· Mateo entered training with no restrictions, full output
+*Load this week*
+· 1 match + 3 GPS training sessions (Wed/Thu high intensity + Mon)
+· Accumulated weekly load ≈ 1815 AU
+· 5 matches in 4 weeks at competitive density
 
-*Load status heading into next match*
-🟢 MODERATE ████░░░░░░
+*🚨 INJURY UPDATE — May 11 (today)*
+Mateo came out of Monday training with a *strain in the inner right calf* (medial gastrocnemius). First muscular symptom in 4+ weeks. Consistent with cumulative decel load across last 3 matches.
 
-*Key metric to watch*
-Match ACWR has eased back to safe range — chronic load building from regular training. Mateo recovered fully from the Apr 11 → Apr 18 → May 2 stretch.
+*Load status*
+🔴 HIGH ████████░░ — downgraded due to symptom
 
-*Decel pattern across recent matches*
-Phoenix 1.18, LA SC 1.44 — sustained eccentric load both games. No symptoms reported but worth knowing.
+*Key metrics to watch*
+1. Decel ratio across last 3 matches: Phoenix 1.18 → LA SC 1.44 → LA Bulls 1.28
+2. Z4+Z5 over last 2 matches: 63 + 60 = 123 min of high cardiac in 7 days
+3. First muscular symptom in 8+ weeks — needs caution
 
-*Context for awareness*
-Mateo has no physical restrictions. Full minutes next match are available from a load standpoint.`;
+*Recommendation for next match*
+Minutes NOT default full-time. Depends on calf assessment by Wed-Fri.
+· If clean by Friday: 60-70% minutes maximum
+· If still tender: bench / friendly only
+· Treatment plan being coordinated with Luis (PT)`;
 
-const LUIS_REPORT = `*Recomendaciones Luis Trujillo — Semana May 4–10, 2026*
+const LUIS_REPORT = `*Recomendaciones Luis Trujillo — Semana May 11+, 2026*
 
-*Estado muscular post-LA Soccer Club (W 1-0, May 2)*
-· 80 min jugados de #6, HID 1034m (LR=1.0, justo en tier)
-· Decels/Accels: 56/39 = 1.44 → carga excéntrica ALTA
-· Cardio extremo: 78% del partido en Z4+Z5, Max HR 197 bpm (récord temporada)
-· SIN molestias reportadas
-· 4 días post-match: entreno fuerte el May 6 sin restricciones (HID 999m)
+*🚨 LESIÓN EN CURSO — Mateo salió de entreno hoy (Lun May 11)*
+*Tirón en gemelo derecho — parte INTERNA (gastrocnemio medial / sóleo).*
+Primera molestia muscular en 4+ semanas. Consistente con carga acumulada.
 
-*Sesión de la semana — masaje + evaluación*
-· Priorizar: cadena posterior (isquios), aductores
-· El ratio Decel/Accel 1.44 de LA SC es el más alto de los últimos 5 partidos — vigilar tensión en semitendinoso/semimembranoso
-· Cuádriceps: 56 decels = mucha frenada, posible tensión en recto femoral
-· Liberación miofascial: psoas-iliaco (jugando de #6, alta demanda en pivote)
+*Contexto que llevó al tirón*
+· 3 partidos consecutivos con ratio Decel/Accel alto: Phoenix 1.18 → LA SC 1.44 → LA Bulls 1.28
+· Z4+Z5 acumulado últimos 2 partidos: 63 + 60 = 123 min de alta intensidad en 7 días
+· Entreno duro el lunes mismo (24h post-match) — el cuerpo dijo "basta"
 
-*Trabajo de fuerza funcional*
-· Nordic curls: 3×6 — protección isquios prioritaria (2 partidos con decel alto)
-· Copenhagen plank: 3×30s c/lado — refuerzo aductor preventivo
-· Single-leg RDL: 3×8 — control excéntrico
-· Pogo jumps / bounding: 2×10 — mantener reactividad explosiva
-· Evitar: cargas pesadas de squat bilateral esta semana
+*Protocolo INMEDIATO (lunes noche → martes mañana)*
+· RICE clásico primeras 24h: hielo 10 min cada 2-3h, compresión, elevación
+· NO masaje profundo las primeras 48h
+· Movilidad pasiva de tobillo en dorsiflexión sin dolor
+· Calf raises PROHIBIDOS hasta evaluación
 
-*Objetivo de la semana*
-Descargar carga excéntrica acumulada (Phoenix + LA SC con ratio decel alto consecutivo) sin perder explosividad. Próximo partido en horizonte — mantener volumen low / quality high.
+*Evaluación martes (May 12)*
+· Palpación: localizar punto sensible exacto en gastrocnemio medial
+· Test de carga: ponerse de puntillas con peso corporal — ¿duele?
+· Walking heel-to-toe — ¿duele?
+· Si ambos negativos: tensión grado 1 (resolución 3-7 días)
+· Si duele: posible grado 1-2 (resolución 7-14 días)
 
-*Señal roja si aparece*
-Tensión en hueco poplíteo, molestia en aductor al abrir cadera, RPE matutino >6 sin razón → avisar a JL inmediatamente.`;
+*Tratamiento desde miércoles (si evaluación OK)*
+· Masaje suave en tríceps sural (sin presión sobre punto doloroso)
+· Liberación miofascial en sóleo y peroneos (compensan al gemelo)
+· Trabajo de aductor y cadera (eslabón cinético arriba)
+
+*Fortalecimiento progresivo (cuando sin dolor)*
+· Calf raises bilaterales: 3×10 sin peso
+· Heel drops eccentric: 3×8 cada lado
+· Single-leg calf raises (test funcional final pre-sprint)
+· Nordic curls pausados esta semana
+
+*Decisión próximo partido*
+· Si limpio jue/vie → minutos limitados (60-70%) máximo
+· Si sigue con molestia → NO juega
+
+*Objetivo*
+Resolver tirón sin que escale a desgarro. El golazo del sábado vale más sano dentro de 2 semanas que jugando lesionado.`;
 
 function SleepBlock({ allSessions }) {
   const matchesOnly = allSessions.filter(s => s.source === "match");
@@ -1055,6 +1076,7 @@ const MATCH_SEED = [
   {"Date":"2026-04-12","Opponent":"RSL Arizona","Opponent Tier":"Strong","Minutes Played":"56","Total Distance (m)":"5242","Intensity (m/min)":"94","HID (m)":"790","Work Rate (%)":"60","Sprint Distance (m)":"255","HSR (m)":"112","Sprints (#)":"19","Accelerations (#)":"40","Decelerations (#)":"49","Max Speed (m/s)":"7.59","RPE (1-10)":"8","Result":"W 2-1","Position":"CM","Goals":"0","Assists":"0"},
   {"Date":"2026-04-18","Opponent":"Phoenix Rising FC","Opponent Tier":"Medium","Minutes Played":"80","Total Distance (m)":"8341","Intensity (m/min)":"104","HID (m)":"1362","Work Rate (%)":"70","Sprint Distance (m)":"591","HSR (m)":"264","Sprints (#)":"41","Accelerations (#)":"57","Decelerations (#)":"67","Max Speed (m/s)":"7.94","RPE (1-10)":"8","Result":"W 4-1","Position":"CM","Goals":"1","Assists":"0"},
   {"Date":"2026-05-02","Opponent":"Los Angeles Soccer Club","Opponent Tier":"Medium","Minutes Played":"80","Total Distance (m)":"8278","Intensity (m/min)":"86","HID (m)":"1034","Work Rate (%)":"39","Sprint Distance (m)":"415","HSR (m)":"112","Sprints (#)":"30","Accelerations (#)":"39","Decelerations (#)":"56","Max Speed (m/s)":"6.88","RPE (1-10)":"6","Result":"W 1-0","Position":"CM","Goals":"0","Assists":"0"},
+  {"Date":"2026-05-09","Opponent":"LA Bulls","Opponent Tier":"Medium","Minutes Played":"80","Total Distance (m)":"8039","Intensity (m/min)":"100","HID (m)":"1236","Work Rate (%)":"74","Sprint Distance (m)":"601","HSR (m)":"198","Sprints (#)":"34","Accelerations (#)":"46","Decelerations (#)":"59","Max Speed (m/s)":"7.37","RPE (1-10)":"8","Result":"L 2-3","Position":"CM","Goals":"1","Assists":"0"},
 ];
 
 function Dashboard() {
