@@ -214,6 +214,8 @@ function rowToMatch(row) {
     redZone: parseFloat(row["Time in Red Zone"] || row["Red Zone (min)"] || 0),
     accel: parseFloat(row["Accelerations (#)"] || row["Accelerations"] || row["Accels"] || 0),
     decel: parseFloat(row["Decelerations (#)"] || row["Decelerations"] || row["Decels"] || 0),
+    maxSpeed: parseFloat(row["Max Speed (m/s)"] || row["Max Speed"] || 0),
+    sprintCount: parseFloat(row["Sprints (#)"] || row["Sprints"] || 0),
   };
 }
 
@@ -1095,32 +1097,70 @@ function luisReport(matches) {
   const accel = last4.reduce((sum, m) => sum + (m.accel || 0), 0);
   const decelRatio = accel > 0 ? (decel / accel).toFixed(2) : "—";
   const decelRisk = accel > 0 && decel > accel * 1.1 ? "⚠ Decel > Accel — priorizar cadena posterior" : "✓ Decel/Accel balanceado";
-  const z45 = last4.reduce((sum, m) => sum + (m.z4 || 0) + (m.z5 || 0), 0);
   const maxSp = Math.max(...last4.map(m => m.maxSpeed || 0));
-  const matchList = last4.map(m => `  ${m.date} vs ${m.opponent}: HID/min ${m.hidMin}, RPE ${m.rpe}, Decel ${m.decel}`).join("\n");
+  const totalSprints = last4.reduce((sum, m) => sum + (m.sprintCount || m.sprints || 0), 0);
+  const totalSprintDist = last4.reduce((sum, m) => sum + (m.sprintDist || 0), 0);
+  const matchList = last4.map(m => {
+    const sp = m.maxSpeed ? `, Max ${m.maxSpeed.toFixed(2)} m/s` : "";
+    return `  ${m.date} vs ${m.opponent}: HID/min ${m.hidMin}, RPE ${m.rpe}, Decel ${m.decel}${sp}`;
+  }).join("\n");
+
+  // Intelligent interpretation
+  const acwrMsg = latest?.acwr > 1.5 ? "OVERLOAD — el cuerpo acumuló demasiada carga en pocos días. Recuperación es prioridad absoluta."
+    : latest?.acwr > 1.3 ? "ELEVADO — 4 partidos en 3 días dejaron carga alta. Necesita descarga activa antes de volver a intensidad."
+    : "OK — carga manejable.";
+  const decelMsg = accel > 0 && decel > accel * 1.1
+    ? `El ratio Decel/Accel (${decelRatio}) indica que Mateo frenó más de lo que arrancó. Esto sobrecarga isquios, sóleo y gemelos — exactamente la cadena que ya tiene comprometida.`
+    : `Ratio Decel/Accel (${decelRatio}) balanceado — buena señal.`;
+  const hidMsg = avgHIDMin > 18 ? `HID/min promedio de ${avgHIDMin.toFixed(1)} es MUY alto — en los últimos 2 partidos rindió a nivel élite (>20 m/min). El cuerpo produjo mucho pero el costo muscular fue alto.`
+    : avgHIDMin > 14 ? `HID/min promedio de ${avgHIDMin.toFixed(1)} está en su rango normal — buen rendimiento sostenido.`
+    : `HID/min promedio de ${avgHIDMin.toFixed(1)} está por debajo de lo normal — posible efecto de altitud o fatiga.`;
 
   return `Luis · Reporte de carga | ${new Date().toLocaleDateString("es-MX")}
 
-ÚLTIMOS ${last4.length} PARTIDOS (MLS Next Cup):
+ÚLTIMOS ${last4.length} PARTIDOS (MLS Next Cup, Salt Lake City 1300m):
 ${matchList}
 
-RESUMEN:
-• Carga total: ${totalLoad} UA en ${totalMins} min
+RESUMEN FÍSICO:
+• Carga total: ${totalLoad} UA en ${totalMins} min (4 partidos en 3 días)
 • HID/min promedio: ${avgHIDMin.toFixed(1)}
-• ACWR actual: ${latest?.acwr?.toFixed(2) ?? "—"} (${latest?.acwr > 1.3 ? "ELEVADO" : latest?.acwr > 0.8 ? "OK" : "bajo"})
-• Decel/Accel ratio: ${decelRatio} → ${decelRisk}
-• Tiempo Z4+Z5 acumulado: ${z45} min
-• Max Speed alcanzada: ${maxSp.toFixed(2)} m/s
+• Sprints totales: ${totalSprints} | Sprint distance: ${totalSprintDist}m
+• ACWR actual: ${latest?.acwr?.toFixed(2) ?? "—"} → ${acwrMsg}
+• Decel/Accel: ${decelRatio} → ${decelRisk}${maxSp > 0 ? `\n• Max Speed: ${maxSp.toFixed(2)} m/s` : ""}
 
-PRIORIDADES:
-1. Gemelo derecho — evaluar ROM y dolor residual
-2. Cadena posterior — isquios + glúteos (carga excéntrica acumulada)
-3. Core stability — base para todas las demás
+INTERPRETACIÓN:
+${hidMsg}
+${decelMsg}
 
-PLAN 6 SEMANAS → MADRID (Jul 12):
-→ Jun 1-14: recuperación activa + movilidad
-→ Jun 15-28: fuerza funcional progresiva
-→ Jun 29-Jul 11: picos de carga + tapering`;
+⚠ LESIONES ACTIVAS:
+1. INGLE DERECHA (dolor inguinal post-Copa América)
+   → Probablemente compensatorio del calf derecho. Mateo reporta que lo sigue sintiendo, sin empeorar. Al no hablar ya del gemelo, el dolor migró hacia arriba en la cadena cinética derecha. Esto es CLÁSICO en lesiones de sóleo/gemelo: el cuerpo compensa alterando la mecánica de carrera, sobrecargando aductores e inguinal.
+   → EVALUAR: aductores, psoas ilíaco, recto femoral — todos del lado derecho.
+   → NO ignorar: si no se corrige la compensación, el siguiente eslabón es cadera o isquio.
+
+2. GEMELO DERECHO (lesión original May 11)
+   → Mateo ya no reporta dolor directo. Puede ser que sanó o que el dolor inguinal "lo tapó". Verificar con test funcional (heel raises, salto unipodal) si realmente está 100%.
+
+PLAN RECOMENDADO — 6 SEMANAS → MADRID (Jul 12):
+Sem 1-2 (Jun 1-14): RECUPERACIÓN
+  • Evaluar cadena derecha completa (calf → aductor → ingle → cadera)
+  • Masaje profundo 2-3x/sem en toda la cadena
+  • Movilidad de cadera + ankle mobility
+  • Excéntricos suaves: heel drops + Copenhagen aductores
+  • CERO sprints, CERO cambios de dirección
+
+Sem 3-4 (Jun 15-28): REACONDICIONAMIENTO
+  • Fuerza funcional progresiva: sentadilla, peso muerto rumano, estocadas
+  • Introducir carrera continua suave (60-70% FC max)
+  • Progresar excéntricos (carga, velocidad)
+  • Introducir cambios de dirección controlados en sem 4
+  • Monitorear ingle en cada sesión
+
+Sem 5-6 (Jun 29-Jul 11): PICO + TAPERING
+  • Intensidad alta, volumen bajo
+  • Simular ritmo de partido (intervalos 4x4, SSG)
+  • Tapering últimos 3 días pre-torneo
+  • Objetivo: llegar a Madrid sin dolor y con base de fuerza reconstruida`;
 }
 
 // ───── Recovery Tab UI ─────────────────────────────────────────────────────
