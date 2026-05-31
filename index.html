@@ -212,8 +212,8 @@ function rowToMatch(row) {
     maxHR: parseFloat(row["Max HR"] || row["Max HR (bpm)"] || 0),
     avgHR: parseFloat(row["Avg HR"] || row["Avg HR (bpm)"] || 0),
     redZone: parseFloat(row["Time in Red Zone"] || row["Red Zone (min)"] || 0),
-    accel: parseFloat(row["Accelerations"] || row["Accels"] || 0),
-    decel: parseFloat(row["Decelerations"] || row["Decels"] || 0),
+    accel: parseFloat(row["Accelerations (#)"] || row["Accelerations"] || row["Accels"] || 0),
+    decel: parseFloat(row["Decelerations (#)"] || row["Decelerations"] || row["Decels"] || 0),
   };
 }
 
@@ -421,6 +421,8 @@ function MatchesTab({ matches }) {
         <KPI label="ACWR parcial partidos" value={latest?.acwr} color={acwrColor(latest?.acwr)} sub={acwrLabel(latest?.acwr)} />
         <KPI label="Load Ratio (últ)" value={latest?.loadRatio} color={loadRatioColor(latest?.loadRatio)} sub={loadRatioLabel(latest?.loadRatio)} />
       </div>
+
+      <ProgressSection matches={matches} />
 
       <ST>ACWR PARCIAL — solo partidos (ver banner superior para ACWR REAL)</ST>
       <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
@@ -784,6 +786,109 @@ const MLS_CUP_DATA = [
   { game: 4, date: "May 30", opponent: "SFFA", result: "W 3-2", goals: 1, assists: 0, mins: 45, totalDist: 6849, hid: 1071, hidMin: 23.80, sprintDist: 477, hsr: 175, sprints: 30, accel: 41, decel: 42, maxSpeed: 7.53, avgMaxSpeed: 5.99, workRate: 64, rpe: 8, avgHR: 146, maxHR: 184, z4: 24, z5: 9, calories: 607 },
 ];
 
+// ───── ¿VOY MEJORANDO? — Performance vs Baseline (Mateo vs Mateo) ──────────
+function ProgressSection({ matches }) {
+  const withAM = useMemo(() => {
+    return matches.map((m, i) => {
+      const prev = matches.slice(Math.max(0, i - 5), i).filter(p => p.hidMin > 0);
+      const prevAvg = prev.length >= 2 ? prev.reduce((s, p) => s + p.hidMin, 0) / prev.length : null;
+      const am = prevAvg && m.hidMin > 0 ? +(m.hidMin / prevAvg).toFixed(2) : null;
+      return { ...m, baseHIDMin: prevAvg ? +prevAvg.toFixed(2) : null, am };
+    });
+  }, [matches]);
+
+  const last8 = withAM.filter(m => m.am != null).slice(-8);
+  if (last8.length < 3) return null;
+
+  const avgAM = +(last8.reduce((s, m) => s + m.am, 0) / last8.length).toFixed(2);
+  const avgPct = Math.round(avgAM * 100);
+
+  const amLabel = (am) => {
+    if (am >= 1.20) return { text: "Excelente", color: C.accent };
+    if (am >= 1.05) return { text: "Arriba de nivel", color: C.green };
+    if (am >= 0.95) return { text: "Normal", color: C.text };
+    if (am >= 0.80) return { text: "Debajo de nivel", color: C.amber };
+    return { text: "Partido flojo", color: C.red };
+  };
+
+  const chartData = last8.map(m => ({
+    name: m.date, opponent: m.opponent, result: m.result,
+    am: Math.round(m.am * 100), hidMin: m.hidMin, baseHIDMin: m.baseHIDMin,
+  }));
+
+  const avgColor = avgAM >= 1.05 ? C.green : avgAM >= 0.95 ? C.text : C.amber;
+  const avgMsg = avgAM >= 1.05
+    ? `Mateo está jugando ${avgPct - 100}% arriba de su base reciente.`
+    : avgAM >= 0.95
+    ? `Mateo está jugando a su nivel estándar.`
+    : `Mateo está jugando ${100 - avgPct}% debajo de su base reciente.`;
+
+  const ProgressTooltip = ({ active, payload, label }) => {
+    if (!active || !payload?.length) return null;
+    const d = payload[0]?.payload;
+    const lbl = amLabel((d?.am || 100) / 100);
+    return (
+      <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 16px" }}>
+        <p style={{ color: C.accent, fontWeight: 700, fontSize: 13, margin: "0 0 4px" }}>{label} — {d?.opponent}</p>
+        <p style={{ color: lbl.color, fontSize: 12, fontFamily: "'Space Mono', monospace", fontWeight: 700, margin: "0 0 4px" }}>{d?.am}% — {lbl.text}</p>
+        <p style={{ color: C.dim, fontSize: 10, fontFamily: "'Space Mono', monospace", margin: "0 0 2px" }}>HID/min actual: {d?.hidMin}</p>
+        <p style={{ color: C.dim, fontSize: 10, fontFamily: "'Space Mono', monospace", margin: 0 }}>Base HID/min: {d?.baseHIDMin}</p>
+      </div>
+    );
+  };
+
+  return (
+    <div>
+      <ST>¿VOY MEJORANDO? — tu rendimiento vs tu propio estándar</ST>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
+        <div style={{ background: C.panel, border: `2px solid ${avgColor}`, borderRadius: 14, padding: "18px 22px", flex: "1 1 180px", minWidth: 180 }}>
+          <p style={{ color: C.dim, fontSize: 8, fontFamily: "'Space Mono', monospace", letterSpacing: 3, textTransform: "uppercase", margin: "0 0 6px" }}>FORMA RECIENTE</p>
+          <p style={{ color: avgColor, fontSize: 42, fontWeight: 900, fontFamily: "'Syne', sans-serif", lineHeight: 1, margin: "0 0 6px" }}>{avgPct}%</p>
+          <p style={{ color: C.text, fontSize: 11, lineHeight: 1.5, margin: 0 }}>{avgMsg}</p>
+        </div>
+        <div style={{ background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 14, padding: "18px 22px", flex: "2 1 280px", minWidth: 260 }}>
+          <p style={{ color: C.accent, fontSize: 10, fontFamily: "'Space Mono', monospace", letterSpacing: 2, textTransform: "uppercase", margin: "0 0 8px" }}>¿QUÉ MIDE ESTO?</p>
+          <p style={{ color: C.text, fontSize: 12, lineHeight: 1.6, margin: 0 }}>
+            No mide si ganamos o perdimos. Mide si corriste y participaste <strong style={{ color: C.accent }}>por encima o por debajo de tu propio nivel reciente</strong>.
+            <br />100% = tu nivel normal. Arriba = estás creciendo. Abajo = tu cuerpo necesita recuperarse.
+          </p>
+        </div>
+      </div>
+      <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, padding: "16px 12px 8px", marginBottom: 16 }}>
+        <ResponsiveContainer width="100%" height={240}>
+          <ComposedChart data={chartData} margin={{ top: 10, right: 20, bottom: 5, left: 0 }}>
+            <CartesianGrid stroke={C.muted} strokeDasharray="3 3" />
+            <XAxis dataKey="name" tick={{ fill: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace" }} />
+            <YAxis domain={[60, 160]} tick={{ fill: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace" }} label={{ value: "% de tu base", angle: -90, position: "insideLeft", fill: C.dim, fontSize: 9 }} />
+            <ReferenceLine y={105} stroke={C.green} strokeDasharray="4 4" strokeOpacity={0.5} />
+            <ReferenceLine y={100} stroke={C.text} strokeWidth={2} strokeDasharray="8 4" />
+            <ReferenceLine y={95} stroke={C.amber} strokeDasharray="4 4" strokeOpacity={0.5} />
+            <Tooltip content={<ProgressTooltip />} />
+            <Line type="monotone" dataKey="am" name="Forma %" stroke={C.accent} strokeWidth={3} dot={{ r: 6, fill: C.accent, stroke: C.bg, strokeWidth: 2 }} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(155px, 1fr))", gap: 10, marginBottom: 20 }}>
+        {last8.map((m, i) => {
+          const lbl = amLabel(m.am);
+          const isW = m.result?.startsWith("W");
+          return (
+            <div key={i} style={{ background: C.panel, border: `1px solid ${lbl.color}33`, borderRadius: 10, padding: "12px 14px" }}>
+              <p style={{ color: C.dim, fontSize: 8, fontFamily: "'Space Mono', monospace", letterSpacing: 2, textTransform: "uppercase", margin: "0 0 3px" }}>{m.date}</p>
+              <p style={{ color: C.text, fontSize: 11, fontWeight: 700, margin: "0 0 6px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {m.opponent} <span style={{ color: isW ? C.green : C.red, fontSize: 9 }}>{m.result}</span>
+              </p>
+              <p style={{ color: lbl.color, fontSize: 24, fontWeight: 900, fontFamily: "'Syne', sans-serif", lineHeight: 1, margin: "0 0 2px" }}>{Math.round(m.am * 100)}%</p>
+              <p style={{ color: lbl.color, fontSize: 9, fontFamily: "'Space Mono', monospace", letterSpacing: 1, margin: "0 0 5px" }}>{lbl.text}</p>
+              <p style={{ color: C.dim, fontSize: 8, fontFamily: "'Space Mono', monospace", margin: 0 }}>HID/min {m.hidMin} | Base {m.baseHIDMin}</p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ───── PLAYOFFS TAB — MLS NEXT CUP Tournament Tracker ─────────────────────
 const METRIC_INFO = {
   hid: { label: "HID", unit: "m", color: C.accent, emoji: "🔥",
@@ -980,29 +1085,42 @@ function PlayoffsTab() {
 // ───── Recovery Tab Functions ───────────────────────────────────────────────
 function luisReport(matches) {
   if (!matches.length) return "";
-  const last3 = matches.slice(-3);
-  const acwrVals = last3.map(m => m.acwr).filter(Boolean);
-  const avgACWR = acwrVals.length ? acwrVals.reduce((a, b) => a + b) / acwrVals.length : null;
-  const decel = last3.reduce((sum, m) => sum + (m.decel || 0), 0);
-  const accel = last3.reduce((sum, m) => sum + (m.accel || 0), 0);
-  const decelRisk = decel > accel * 1.1 ? "⚠ Decel > Accel — priorizar cadena posterior" : "✓ Decel/Accel balanceado";
-  const totalLoad = last3.reduce((sum, m) => sum + (m.load || 0), 0);
+  const withACWR = computeACWR(matches);
+  const last4 = withACWR.slice(-4);
+  const latest = withACWR[withACWR.length - 1];
+  const totalLoad = last4.reduce((sum, m) => sum + (m.load || 0), 0);
+  const totalMins = last4.reduce((sum, m) => sum + (m.mins || 0), 0);
+  const avgHIDMin = last4.reduce((sum, m) => sum + (m.hidMin || 0), 0) / last4.length;
+  const decel = last4.reduce((sum, m) => sum + (m.decel || 0), 0);
+  const accel = last4.reduce((sum, m) => sum + (m.accel || 0), 0);
+  const decelRatio = accel > 0 ? (decel / accel).toFixed(2) : "—";
+  const decelRisk = accel > 0 && decel > accel * 1.1 ? "⚠ Decel > Accel — priorizar cadena posterior" : "✓ Decel/Accel balanceado";
+  const z45 = last4.reduce((sum, m) => sum + (m.z4 || 0) + (m.z5 || 0), 0);
+  const maxSp = Math.max(...last4.map(m => m.maxSpeed || 0));
+  const matchList = last4.map(m => `  ${m.date} vs ${m.opponent}: HID/min ${m.hidMin}, RPE ${m.rpe}, Decel ${m.decel}`).join("\n");
+
   return `Luis · Reporte de carga | ${new Date().toLocaleDateString("es-MX")}
 
-Últimos ${last3.length} partidos:
-• Carga total: ${totalLoad} UA
-• ACWR: ${avgACWR?.toFixed(2) ?? "sin datos suficientes"}
-• Decel: ${decel} | Accel: ${accel} → ${decelRisk}
+ÚLTIMOS ${last4.length} PARTIDOS (MLS Next Cup):
+${matchList}
+
+RESUMEN:
+• Carga total: ${totalLoad} UA en ${totalMins} min
+• HID/min promedio: ${avgHIDMin.toFixed(1)}
+• ACWR actual: ${latest?.acwr?.toFixed(2) ?? "—"} (${latest?.acwr > 1.3 ? "ELEVADO" : latest?.acwr > 0.8 ? "OK" : "bajo"})
+• Decel/Accel ratio: ${decelRatio} → ${decelRisk}
+• Tiempo Z4+Z5 acumulado: ${z45} min
+• Max Speed alcanzada: ${maxSp.toFixed(2)} m/s
 
 PRIORIDADES:
 1. Gemelo derecho — evaluar ROM y dolor residual
 2. Cadena posterior — isquios + glúteos (carga excéntrica acumulada)
 3. Core stability — base para todas las demás
 
-Fase actual: RECUPERACIÓN POST-TEMPORADA
-→ Semanas 1-2: recuperación activa + movilidad
-→ Semanas 3-4: reacondicionamiento progresivo
-→ Semanas 5-6: picos de carga + tapering pre-Madrid (Jul 12)`;
+PLAN 6 SEMANAS → MADRID (Jul 12):
+→ Jun 1-14: recuperación activa + movilidad
+→ Jun 15-28: fuerza funcional progresiva
+→ Jun 29-Jul 11: picos de carga + tapering`;
 }
 
 // ───── Recovery Tab UI ─────────────────────────────────────────────────────
