@@ -3,11 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mateo · GPS Performance Dashboard v5</title>
+  <title>Mateo &middot; GPS Performance Dashboard v5</title>
   <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/recharts@2.5.0/umd/Recharts.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -32,17 +31,63 @@
 </head>
 <body>
 <div id="root"></div>
-<script type="text/babel">
-const { useState, useMemo, useEffect, useCallback } = React;
-const { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-        Legend, ResponsiveContainer, ReferenceLine, Cell, ComposedChart, Area } = Recharts;
-
+<script>
+(function(){
+  function fatal(msg){
+    var r=document.getElementById('root');
+    if(r){ r.innerHTML='<div style=\"font-family:Space Mono,monospace;color:#f87171;background:#0a1520;border:1px solid #ef4444;border-radius:10px;padding:18px;max-width:560px;margin:48px auto;line-height:1.6\"><strong>No se pudo iniciar el dashboard</strong><br><br>'+msg+'<br><br><span style=\"color:#3d5a73;font-size:11px\">Recarga la pagina o prueba en pestana privada. Si persiste: revisa conexion / bloqueadores de contenido.</span></div>'; }
+  }
+  window.addEventListener('error', function(e){
+    var r=document.getElementById('root');
+    if(r && !r.firstChild){ fatal('Error de ejecucion: '+((e&&e.message)?e.message:'desconocido')); }
+  });
+  window.addEventListener('DOMContentLoaded', function(){
+    var miss=[];
+    if(typeof React==='undefined') miss.push('React');
+    if(typeof ReactDOM==='undefined') miss.push('ReactDOM');
+    if(typeof Recharts==='undefined') miss.push('Recharts');
+    if(miss.length){ fatal('No se cargaron librerias externas: '+miss.join(', ')+'. (CDN bloqueado o sin conexion.)'); }
+  });
+})();
+</script>
+<script>
+const {
+  useState,
+  useMemo,
+  useEffect,
+  useCallback
+} = React;
+const {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  ReferenceLine,
+  Cell,
+  ComposedChart,
+  Area
+} = Recharts;
 const C = {
-  bg: "#060a0f", panel: "#0b1520", panel2: "#0f1e2e",
-  border: "#1a2d44", accent: "#00e5ff", green: "#22d47a",
-  amber: "#f5a623", red: "#f04040", purple: "#a855f7",
-  text: "#c9d6e3", dim: "#3d5a73", muted: "#1e3349",
-  orange: "#ff6b35", blue: "#4aa3ff"
+  bg: "#060a0f",
+  panel: "#0b1520",
+  panel2: "#0f1e2e",
+  border: "#1a2d44",
+  accent: "#00e5ff",
+  green: "#22d47a",
+  amber: "#f5a623",
+  red: "#f04040",
+  purple: "#a855f7",
+  text: "#c9d6e3",
+  dim: "#3d5a73",
+  muted: "#1e3349",
+  orange: "#ff6b35",
+  blue: "#4aa3ff"
 };
 
 // ───── Google Sheets CSV export ────────────────────────────────────────────
@@ -55,53 +100,97 @@ const TRAINING_GID = "2018907103"; // WEEKPRACTICE_LOG
 
 // cache-buster: Google Sheets cachea agresivamente el CSV export (~5 min).
 // Con &cb=timestamp forzamos fetch fresco en cada carga del dashboard.
-const csvUrl = (gid) => `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${gid}&cb=${Date.now()}`;
-
+const csvUrl = gid => `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${gid}&cb=${Date.now()}`;
 const TOOLTIP = {
-  contentStyle: { background: "#0b1520", border: "1px solid #1a2d44", borderRadius: 8, color: "#c9d6e3", fontSize: 11, fontFamily: "'Space Mono', monospace" },
-  itemStyle: { color: "#c9d6e3" },
-  labelStyle: { color: "#00e5ff", fontWeight: 700 }
+  contentStyle: {
+    background: "#0b1520",
+    border: "1px solid #1a2d44",
+    borderRadius: 8,
+    color: "#c9d6e3",
+    fontSize: 11,
+    fontFamily: "'Space Mono', monospace"
+  },
+  itemStyle: {
+    color: "#c9d6e3"
+  },
+  labelStyle: {
+    color: "#00e5ff",
+    fontWeight: 700
+  }
 };
-const MATCH_TT = { ...TOOLTIP, labelFormatter: (label, payload) => {
-  const d = payload?.[0]?.payload;
-  return d?.opponent ? `${label} — ${d.opponent}` : label;
-}};
-
-const TIER_MDI = { "1": 1.0, "2": 0.82, "3": 0.65, "4": 0.50 };
+const MATCH_TT = {
+  ...TOOLTIP,
+  labelFormatter: (label, payload) => {
+    var _payload$;
+    const d = payload === null || payload === void 0 || (_payload$ = payload[0]) === null || _payload$ === void 0 ? void 0 : _payload$.payload;
+    return d !== null && d !== void 0 && d.opponent ? `${label} — ${d.opponent}` : label;
+  }
+};
+const TIER_MDI = {
+  "1": 1.0,
+  "2": 0.82,
+  "3": 0.65,
+  "4": 0.50
+};
 // Calibrado con promedios reales de Mateo (10 partidos, Apr 2026). Recalibrar cada ~10 partidos.
-const EXPECTED_HID_PER_MIN = { "1": 17.0, "2": 15.0, "3": 13.0, "4": 12.0 };
-
+const EXPECTED_HID_PER_MIN = {
+  "1": 17.0,
+  "2": 15.0,
+  "3": 13.0,
+  "4": 12.0
+};
 const TIER_TEXT_MAP = {
-  "elite": "1", "t1": "1", "1": "1",
-  "strong": "2", "t2": "2", "2": "2",
-  "medium": "3", "t3": "3", "3": "3",
-  "low": "4", "very low": "4", "t4": "4", "4": "4"
+  "elite": "1",
+  "t1": "1",
+  "1": "1",
+  "strong": "2",
+  "t2": "2",
+  "2": "2",
+  "medium": "3",
+  "t3": "3",
+  "3": "3",
+  "low": "4",
+  "very low": "4",
+  "t4": "4",
+  "4": "4"
 };
 function getTierKey(tier) {
   if (!tier) return "2";
   const key = String(tier).trim().toLowerCase();
   return TIER_TEXT_MAP[key] || String(tier).replace(/[^0-9]/g, "") || "2";
 }
-function getMDI(tier) { return TIER_MDI[getTierKey(tier)] ?? 0.75; }
+function getMDI(tier) {
+  var _TIER_MDI$getTierKey;
+  return (_TIER_MDI$getTierKey = TIER_MDI[getTierKey(tier)]) !== null && _TIER_MDI$getTierKey !== void 0 ? _TIER_MDI$getTierKey : 0.75;
+}
 function getExpectedHID(tier, mins) {
-  const rate = EXPECTED_HID_PER_MIN[getTierKey(tier)] ?? 7.0;
+  var _EXPECTED_HID_PER_MIN;
+  const rate = (_EXPECTED_HID_PER_MIN = EXPECTED_HID_PER_MIN[getTierKey(tier)]) !== null && _EXPECTED_HID_PER_MIN !== void 0 ? _EXPECTED_HID_PER_MIN : 7.0;
   return mins > 0 ? +(rate * mins).toFixed(0) : null;
 }
-
 function parseCSV(text) {
   const lines = text.trim().split("\n");
   const headers = lines[0].split(",").map(h => h.trim().replace(/^"|"$/g, ""));
   return lines.slice(1).map(line => {
-    const cols = []; let cur = "", inQ = false;
+    const cols = [];
+    let cur = "",
+      inQ = false;
     for (let i = 0; i < line.length; i++) {
       const ch = line[i];
-      if (ch === '"') { inQ = !inQ; }
-      else if (ch === ',' && !inQ) { cols.push(cur); cur = ""; }
-      else { cur += ch; }
+      if (ch === '"') {
+        inQ = !inQ;
+      } else if (ch === ',' && !inQ) {
+        cols.push(cur);
+        cur = "";
+      } else {
+        cur += ch;
+      }
     }
     cols.push(cur);
     const obj = {};
-    headers.forEach((h, i) => { obj[h] = (cols[i] || "").trim().replace(/^"|"$/g, ""); });
+    headers.forEach((h, i) => {
+      obj[h] = (cols[i] || "").trim().replace(/^"|"$/g, "");
+    });
     return obj;
   });
 }
@@ -120,7 +209,8 @@ function parseDate(raw) {
   // US M/D/YYYY o M/D/YY
   m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
   if (m) {
-    let y = +m[3]; if (y < 100) y += 2000;
+    let y = +m[3];
+    if (y < 100) y += 2000;
     return new Date(y, +m[1] - 1, +m[2]);
   }
 
@@ -132,23 +222,61 @@ function parseDate(raw) {
   // "mar", "may", "sep", "oct", "nov" coinciden en ambos idiomas.
   const MESES = {
     // Español corto
-    ene:0, feb:1, mar:2, abr:3, may:4, jun:5, jul:6, ago:7, sep:8, oct:9, nov:10, dic:11,
+    ene: 0,
+    feb: 1,
+    mar: 2,
+    abr: 3,
+    may: 4,
+    jun: 5,
+    jul: 6,
+    ago: 7,
+    sep: 8,
+    oct: 9,
+    nov: 10,
+    dic: 11,
     // Español largo
-    enero:0, febrero:1, marzo:2, abril:3, mayo:4, junio:5, julio:6, agosto:7,
-    septiembre:8, octubre:9, noviembre:10, diciembre:11,
+    enero: 0,
+    febrero: 1,
+    marzo: 2,
+    abril: 3,
+    mayo: 4,
+    junio: 5,
+    julio: 6,
+    agosto: 7,
+    septiembre: 8,
+    octubre: 9,
+    noviembre: 10,
+    diciembre: 11,
     // Inglés corto (los únicos nuevos vs ES: jan, apr, aug, sept, dec)
-    jan:0, apr:3, aug:7, sept:8, dec:11,
+    jan: 0,
+    apr: 3,
+    aug: 7,
+    sept: 8,
+    dec: 11,
     // Inglés largo
-    january:0, february:1, march:2, april:3, june:5, july:6, august:7,
-    september:8, october:9, november:10, december:11
+    january: 0,
+    february: 1,
+    march: 2,
+    april: 3,
+    june: 5,
+    july: 6,
+    august: 7,
+    september: 8,
+    october: 9,
+    november: 10,
+    december: 11
   };
 
   // Acepta separador espacio O guion: "1 Apr", "31-mar", "16 de abril 2026", "7 Apr 2026"
   m = s.toLowerCase().match(/^(\d{1,2})[\s-]+(?:de[\s-]+)?([a-záéíóú]+)\.?(?:[\s,-]+(\d{2,4}))?$/);
   if (m && MESES[m[2]] !== undefined) {
     let y;
-    if (m[3]) { y = +m[3]; if (y < 100) y += 2000; }
-    else       { y = new Date().getFullYear(); }
+    if (m[3]) {
+      y = +m[3];
+      if (y < 100) y += 2000;
+    } else {
+      y = new Date().getFullYear();
+    }
     return new Date(y, MESES[m[2]], +m[1]);
   }
 
@@ -156,8 +284,12 @@ function parseDate(raw) {
   m = s.toLowerCase().match(/^([a-záéíóú]+)\.?[\s-]+(\d{1,2})(?:[\s,-]+(\d{2,4}))?$/);
   if (m && MESES[m[1]] !== undefined) {
     let y;
-    if (m[3]) { y = +m[3]; if (y < 100) y += 2000; }
-    else       { y = new Date().getFullYear(); }
+    if (m[3]) {
+      y = +m[3];
+      if (y < 100) y += 2000;
+    } else {
+      y = new Date().getFullYear();
+    }
     return new Date(y, MESES[m[1]], +m[2]);
   }
 
@@ -165,18 +297,18 @@ function parseDate(raw) {
   const d = new Date(s);
   return isNaN(d) ? null : d;
 }
-
 function formatDate(raw) {
   const d = parseDate(raw);
   if (!d) return raw || "";
-  return d.toLocaleDateString("es-MX", { month: "short", day: "numeric" });
+  return d.toLocaleDateString("es-MX", {
+    month: "short",
+    day: "numeric"
+  });
 }
-
 function daysBetween(a, b) {
   if (!a || !b) return null;
   return Math.round((b - a) / 86400000);
 }
-
 function rowToMatch(row) {
   const mins = parseFloat(row["Minutes Played"]) || 0;
   const dist = parseFloat(row["Total Distance (m)"]) || 0;
@@ -185,7 +317,7 @@ function rowToMatch(row) {
   const hidMin = mins > 0 && hid > 0 ? parseFloat((hid / mins).toFixed(2)) : 0;
   const workRate = parseFloat(row["Work Rate (%)"]) || 0;
   const rpeRaw = parseFloat(row["RPE (1-10)"]);
-  const rpe = !isNaN(rpeRaw) && rpeRaw > 0 ? rpeRaw : (workRate > 0 ? Math.min(10, Math.round(workRate / 10)) : 6);
+  const rpe = !isNaN(rpeRaw) && rpeRaw > 0 ? rpeRaw : workRate > 0 ? Math.min(10, Math.round(workRate / 10)) : 6;
   const load = Math.round(mins * rpe);
   const tier = row["Opponent Tier"] || "2";
   const mdi = getMDI(tier);
@@ -200,22 +332,40 @@ function rowToMatch(row) {
   const z5 = parseFloat(row["Z5"] || row["HR Z5"] || 0);
   return {
     source: "match",
-    rawDate, dateObj, date: formatDate(rawDate),
-    opponent: row["Opponent"] || "", tier, mdi,
-    mins, pos: row["Position"] || "", result: row["Result"] || "",
-    goals: parseFloat(row["Goals"]) || 0, assists: parseFloat(row["Assists"]) || 0,
-    workRate, totalDist: dist, intensity, hid, hidMin,
+    rawDate,
+    dateObj,
+    date: formatDate(rawDate),
+    opponent: row["Opponent"] || "",
+    tier,
+    mdi,
+    mins,
+    pos: row["Position"] || "",
+    result: row["Result"] || "",
+    goals: parseFloat(row["Goals"]) || 0,
+    assists: parseFloat(row["Assists"]) || 0,
+    workRate,
+    totalDist: dist,
+    intensity,
+    hid,
+    hidMin,
     sprintDist: parseFloat(row["Sprint Distance (m)"]) || 0,
     hsr: parseFloat(row["HSR (m)"]) || 0,
-    rpe, load, expHID, loadRatio,
-    z1, z2, z3, z4, z5,
+    rpe,
+    load,
+    expHID,
+    loadRatio,
+    z1,
+    z2,
+    z3,
+    z4,
+    z5,
     maxHR: parseFloat(row["Max HR"] || row["Max HR (bpm)"] || 0),
     avgHR: parseFloat(row["Avg HR"] || row["Avg HR (bpm)"] || 0),
     redZone: parseFloat(row["Time in Red Zone"] || row["Red Zone (min)"] || 0),
     accel: parseFloat(row["Accelerations (#)"] || row["Accelerations"] || row["Accels"] || 0),
     decel: parseFloat(row["Decelerations (#)"] || row["Decelerations"] || row["Decels"] || 0),
     maxSpeed: parseFloat(row["Max Speed (m/s)"] || row["Max Speed"] || 0),
-    sprintCount: parseFloat(row["Sprints (#)"] || row["Sprints"] || 0),
+    sprintCount: parseFloat(row["Sprints (#)"] || row["Sprints"] || 0)
   };
 }
 
@@ -223,10 +373,13 @@ function rowToMatch(row) {
 function rowToTraining(row) {
   // Lookup case-insensitive para tolerar diferencias en headers del Sheet
   const lowerMap = {};
-  Object.keys(row).forEach(k => { lowerMap[k.toLowerCase().trim()] = row[k]; });
+  Object.keys(row).forEach(k => {
+    lowerMap[k.toLowerCase().trim()] = row[k];
+  });
   const pick = (...keys) => {
     for (const k of keys) {
-      const v = row[k] ?? lowerMap[k.toLowerCase().trim()];
+      var _row$k;
+      const v = (_row$k = row[k]) !== null && _row$k !== void 0 ? _row$k : lowerMap[k.toLowerCase().trim()];
       if (v != null && String(v).trim() !== "") return v;
     }
     return "";
@@ -257,17 +410,34 @@ function rowToTraining(row) {
     source: "training",
     type: pick("Type", "Session Type") || "Training",
     name: pick("Name", "Session Name") || "",
-    rawDate, dateObj, date: formatDate(rawDate),
-    mins, totalDist, intensity, hid, hidMin, hsr,
-    sprints, accel, decel, maxSpeed,
-    rpe, load, avgHR, maxHR,
-    z1, z2, z3, z4, z5,
+    rawDate,
+    dateObj,
+    date: formatDate(rawDate),
+    mins,
+    totalDist,
+    intensity,
+    hid,
+    hidMin,
+    hsr,
+    sprints,
+    accel,
+    decel,
+    maxSpeed,
+    rpe,
+    load,
+    avgHR,
+    maxHR,
+    z1,
+    z2,
+    z3,
+    z4,
+    z5
   };
 }
 
 // ACWR: fecha real — ventana deslizante de 7d aguda / 28d crónica
 function computeACWR(sessions) {
-  return sessions.map((s) => {
+  return sessions.map(s => {
     const refDate = s.dateObj || new Date();
     const msDay = 86400000;
     const acute = sessions.filter(x => {
@@ -283,10 +453,14 @@ function computeACWR(sessions) {
     const acuteAvg = acute.length ? acute.reduce((a, x) => a + x.load, 0) / 7 : 0;
     const chronicAvg = chronic.length ? chronic.reduce((a, x) => a + x.load, 0) / 28 : 0;
     const acwr = chronicAvg > 0 ? parseFloat((acuteAvg / chronicAvg).toFixed(2)) : null;
-    return { ...s, acwr, acuteLoad: Math.round(acuteAvg * 7), chronicLoad: Math.round(chronicAvg * 28) };
+    return {
+      ...s,
+      acwr,
+      acuteLoad: Math.round(acuteAvg * 7),
+      chronicLoad: Math.round(chronicAvg * 28)
+    };
   });
 }
-
 function acwrColor(v) {
   if (v == null) return C.dim;
   if (v < 0.8) return C.amber;
@@ -315,308 +489,998 @@ function loadRatioLabel(v) {
   if (v <= 1.35) return "Alto";
   return "EXCESO";
 }
-
-function KPI({ label, value, unit, color = C.accent, sub }) {
-  return (
-    <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 10, padding: "14px 16px", flex: 1, minWidth: 110 }}>
-      <p style={{ color: C.dim, fontSize: 8, letterSpacing: 2.5, textTransform: "uppercase", fontFamily: "'Space Mono', monospace", marginBottom: 6 }}>{label}</p>
-      <p style={{ color, fontSize: 22, fontWeight: 800, lineHeight: 1, fontFamily: "'Syne', sans-serif" }}>
-        {value != null ? value : "—"}
-        <span style={{ fontSize: 10, color: C.dim, marginLeft: 3, fontWeight: 400 }}>{unit}</span>
-      </p>
-      {sub && <p style={{ color: C.dim, fontSize: 9, marginTop: 5, fontFamily: "'Space Mono', monospace" }}>{sub}</p>}
-    </div>
-  );
+function KPI({
+  label,
+  value,
+  unit,
+  color = C.accent,
+  sub
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.panel,
+      border: `1px solid ${C.border}`,
+      borderRadius: 10,
+      padding: "14px 16px",
+      flex: 1,
+      minWidth: 110
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.dim,
+      fontSize: 8,
+      letterSpacing: 2.5,
+      textTransform: "uppercase",
+      fontFamily: "'Space Mono', monospace",
+      marginBottom: 6
+    }
+  }, label), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color,
+      fontSize: 22,
+      fontWeight: 800,
+      lineHeight: 1,
+      fontFamily: "'Syne', sans-serif"
+    }
+  }, value != null ? value : "—", /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 10,
+      color: C.dim,
+      marginLeft: 3,
+      fontWeight: 400
+    }
+  }, unit)), sub && /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.dim,
+      fontSize: 9,
+      marginTop: 5,
+      fontFamily: "'Space Mono', monospace"
+    }
+  }, sub));
 }
-
-function ST({ children }) {
-  return (
-    <div style={{ borderBottom: `1px solid ${C.border}`, paddingBottom: 8, marginBottom: 14, marginTop: 28 }}>
-      <h3 style={{ color: C.dim, fontSize: 8, letterSpacing: 3, textTransform: "uppercase", fontFamily: "'Space Mono', monospace" }}>{children}</h3>
-    </div>
-  );
+function ST({
+  children
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      borderBottom: `1px solid ${C.border}`,
+      paddingBottom: 8,
+      marginBottom: 14,
+      marginTop: 28
+    }
+  }, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      color: C.dim,
+      fontSize: 8,
+      letterSpacing: 3,
+      textTransform: "uppercase",
+      fontFamily: "'Space Mono', monospace"
+    }
+  }, children));
 }
-
-function Badge({ color, label }) {
-  return <span style={{ background: color + "22", border: `1px solid ${color}44`, borderRadius: 4, padding: "2px 8px", color, fontSize: 9, fontFamily: "'Space Mono', monospace", letterSpacing: 1 }}>{label}</span>;
+function Badge({
+  color,
+  label
+}) {
+  return /*#__PURE__*/React.createElement("span", {
+    style: {
+      background: color + "22",
+      border: `1px solid ${color}44`,
+      borderRadius: 4,
+      padding: "2px 8px",
+      color,
+      fontSize: 9,
+      fontFamily: "'Space Mono', monospace",
+      letterSpacing: 1
+    }
+  }, label);
 }
-
-function AlertBar({ acwr, loadRatio, scope = "" }) {
+function AlertBar({
+  acwr,
+  loadRatio,
+  scope = ""
+}) {
   const alerts = [];
   const pre = scope ? `[${scope}] ` : "";
-  if (acwr > 1.5) alerts.push({ color: C.red, text: `${pre}ACWR ${acwr} — Riesgo alto de lesión. Reducir carga inmediatamente.` });
-  else if (acwr > 1.3) alerts.push({ color: C.amber, text: `${pre}ACWR ${acwr} — Zona precaución. Monitorear recuperación.` });
-  else if (acwr != null && acwr < 0.8) alerts.push({ color: C.amber, text: `${pre}ACWR ${acwr} — Underload. Riesgo de desentrenamiento.` });
-  if (loadRatio > 1.35) alerts.push({ color: C.red, text: `${pre}Load Ratio ${loadRatio} — HID excede expected para este rival.` });
+  if (acwr > 1.5) alerts.push({
+    color: C.red,
+    text: `${pre}ACWR ${acwr} — Riesgo alto de lesión. Reducir carga inmediatamente.`
+  });else if (acwr > 1.3) alerts.push({
+    color: C.amber,
+    text: `${pre}ACWR ${acwr} — Zona precaución. Monitorear recuperación.`
+  });else if (acwr != null && acwr < 0.8) alerts.push({
+    color: C.amber,
+    text: `${pre}ACWR ${acwr} — Underload. Riesgo de desentrenamiento.`
+  });
+  if (loadRatio > 1.35) alerts.push({
+    color: C.red,
+    text: `${pre}Load Ratio ${loadRatio} — HID excede expected para este rival.`
+  });
   if (!alerts.length) return null;
-  return (
-    <div style={{ marginBottom: 16 }}>
-      {alerts.map((a, i) => (
-        <div key={i} style={{ background: a.color + "15", border: `1px solid ${a.color}55`, borderRadius: 8, padding: "10px 16px", marginBottom: 6, display: "flex", gap: 10, alignItems: "center" }}>
-          <span style={{ color: a.color, fontSize: 16 }}>⚠</span>
-          <span style={{ color: a.color, fontFamily: "'Space Mono', monospace", fontSize: 11 }}>{a.text}</span>
-        </div>
-      ))}
-    </div>
-  );
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 16
+    }
+  }, alerts.map((a, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      background: a.color + "15",
+      border: `1px solid ${a.color}55`,
+      borderRadius: 8,
+      padding: "10px 16px",
+      marginBottom: 6,
+      display: "flex",
+      gap: 10,
+      alignItems: "center"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: a.color,
+      fontSize: 16
+    }
+  }, "⚠"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: a.color,
+      fontFamily: "'Space Mono', monospace",
+      fontSize: 11
+    }
+  }, a.text))));
 }
 
 // ───── UNIFIED ACWR BANNER ─────────────────────────────────────────────────
-function UnifiedACWRBanner({ unified, matchOnly, trainingOnly, daysSinceMatch }) {
-  if (!unified?.acwr) return null;
+function UnifiedACWRBanner({
+  unified,
+  matchOnly,
+  trainingOnly,
+  daysSinceMatch
+}) {
+  if (!(unified !== null && unified !== void 0 && unified.acwr)) return null;
   const col = acwrColor(unified.acwr);
-  return (
-    <div style={{ background: `linear-gradient(135deg, ${C.panel}, ${C.panel2})`, border: `2px solid ${col}`, borderRadius: 14, padding: "18px 22px", marginBottom: 20, display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
-      <div style={{ width: 56, height: 56, borderRadius: "50%", background: col + "22", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-        <span style={{ color: col, fontSize: 24, fontWeight: 900 }}>{unified.acwr > 1.5 ? "!" : unified.acwr < 0.8 ? "↓" : "✓"}</span>
-      </div>
-      <div style={{ flex: 1, minWidth: 240 }}>
-        <p style={{ color: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace", letterSpacing: 3, textTransform: "uppercase" }}>ACWR REAL · Unificado (partidos + entrenos)</p>
-        <p style={{ color: col, fontSize: 34, fontWeight: 900, fontFamily: "'Syne', sans-serif", lineHeight: 1, marginTop: 3 }}>
-          {unified.acwr} <span style={{ fontSize: 14, fontWeight: 400 }}>{acwrLabel(unified.acwr)}</span>
-        </p>
-        <p style={{ color: C.dim, fontSize: 10, fontFamily: "'Space Mono', monospace", marginTop: 6 }}>
-          7d aguda: {unified.acuteLoad} UA · 28d crónica: {unified.chronicLoad} UA
-          {daysSinceMatch != null && ` · ${daysSinceMatch}d desde último partido`}
-        </p>
-      </div>
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", minWidth: 110 }}>
-          <p style={{ color: C.dim, fontSize: 8, fontFamily: "'Space Mono', monospace", letterSpacing: 2 }}>PARCIAL PARTIDOS</p>
-          <p style={{ color: acwrColor(matchOnly), fontSize: 16, fontWeight: 700, fontFamily: "'Syne'" }}>{matchOnly ?? "—"}</p>
-        </div>
-        <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", minWidth: 110 }}>
-          <p style={{ color: C.dim, fontSize: 8, fontFamily: "'Space Mono', monospace", letterSpacing: 2 }}>PARCIAL TRAINING</p>
-          <p style={{ color: acwrColor(trainingOnly), fontSize: 16, fontWeight: 700, fontFamily: "'Syne'" }}>{trainingOnly ?? "—"}</p>
-        </div>
-      </div>
-    </div>
-  );
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: `linear-gradient(135deg, ${C.panel}, ${C.panel2})`,
+      border: `2px solid ${col}`,
+      borderRadius: 14,
+      padding: "18px 22px",
+      marginBottom: 20,
+      display: "flex",
+      alignItems: "center",
+      gap: 20,
+      flexWrap: "wrap"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 56,
+      height: 56,
+      borderRadius: "50%",
+      background: col + "22",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: col,
+      fontSize: 24,
+      fontWeight: 900
+    }
+  }, unified.acwr > 1.5 ? "!" : unified.acwr < 0.8 ? "↓" : "✓")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      minWidth: 240
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.dim,
+      fontSize: 9,
+      fontFamily: "'Space Mono', monospace",
+      letterSpacing: 3,
+      textTransform: "uppercase"
+    }
+  }, "ACWR REAL · Unificado (partidos + entrenos)"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: col,
+      fontSize: 34,
+      fontWeight: 900,
+      fontFamily: "'Syne', sans-serif",
+      lineHeight: 1,
+      marginTop: 3
+    }
+  }, unified.acwr, " ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 14,
+      fontWeight: 400
+    }
+  }, acwrLabel(unified.acwr))), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.dim,
+      fontSize: 10,
+      fontFamily: "'Space Mono', monospace",
+      marginTop: 6
+    }
+  }, "7d aguda: ", unified.acuteLoad, " UA · 28d crónica: ", unified.chronicLoad, " UA", daysSinceMatch != null && ` · ${daysSinceMatch}d desde último partido`)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      flexWrap: "wrap"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.bg,
+      border: `1px solid ${C.border}`,
+      borderRadius: 8,
+      padding: "8px 12px",
+      minWidth: 110
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.dim,
+      fontSize: 8,
+      fontFamily: "'Space Mono', monospace",
+      letterSpacing: 2
+    }
+  }, "PARCIAL PARTIDOS"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: acwrColor(matchOnly),
+      fontSize: 16,
+      fontWeight: 700,
+      fontFamily: "'Syne'"
+    }
+  }, matchOnly !== null && matchOnly !== void 0 ? matchOnly : "—")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.bg,
+      border: `1px solid ${C.border}`,
+      borderRadius: 8,
+      padding: "8px 12px",
+      minWidth: 110
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.dim,
+      fontSize: 8,
+      fontFamily: "'Space Mono', monospace",
+      letterSpacing: 2
+    }
+  }, "PARCIAL TRAINING"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: acwrColor(trainingOnly),
+      fontSize: 16,
+      fontWeight: 700,
+      fontFamily: "'Syne'"
+    }
+  }, trainingOnly !== null && trainingOnly !== void 0 ? trainingOnly : "—"))));
 }
-
-function MatchesTab({ matches }) {
-  if (!matches?.length) return (
-    <div style={{ textAlign: "center", padding: "80px 0", color: C.dim, fontFamily: "'Space Mono', monospace", fontSize: 12 }}>
-      Cargando datos desde Google Sheets...<br /><span style={{ color: C.accent }}>Un momento</span>
-    </div>
-  );
-
+function MatchesTab({
+  matches
+}) {
+  if (!(matches !== null && matches !== void 0 && matches.length)) return /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "80px 0",
+      color: C.dim,
+      fontFamily: "'Space Mono', monospace",
+      fontSize: 12
+    }
+  }, "Cargando datos desde Google Sheets...", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: C.accent
+    }
+  }, "Un momento"));
   const avg = key => {
     const v = matches.map(m => m[key]).filter(x => x != null && x > 0);
     return v.length ? +(v.reduce((a, b) => a + b, 0) / v.length).toFixed(2) : null;
   };
-
   const withACWR = useMemo(() => computeACWR(matches), [matches]);
   const latest = withACWR[withACWR.length - 1];
   const hasHR = matches.some(m => m.z1 > 0 || m.z2 > 0);
   const hasAccel = matches.some(m => m.accel > 0 || m.decel > 0);
-
-  const lrData = withACWR.map(m => ({ date: m.date, actual: m.hid, expected: m.expHID, ratio: m.loadRatio }));
-
-  return (
-    <div>
-      <AlertBar acwr={latest?.acwr} loadRatio={latest?.loadRatio} scope="Partidos" />
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
-        <KPI label="Partidos" value={matches.length} color={C.accent} />
-        <KPI label="HID/min avg" value={avg("hidMin")} unit="m/min" color={C.orange} />
-        <KPI label="Intensidad avg" value={avg("intensity")} unit="m/min" color={C.accent} />
-        <KPI label="ACWR parcial partidos" value={latest?.acwr} color={acwrColor(latest?.acwr)} sub={acwrLabel(latest?.acwr)} />
-        <KPI label="Load Ratio (últ)" value={latest?.loadRatio} color={loadRatioColor(latest?.loadRatio)} sub={loadRatioLabel(latest?.loadRatio)} />
-      </div>
-
-      <ProgressSection matches={matches} />
-
-      <ST>ACWR PARCIAL — solo partidos (ver banner superior para ACWR REAL)</ST>
-      <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
-        <Badge color={C.amber} label="Underload &lt;0.8" />
-        <Badge color={C.green} label="Óptimo 0.8–1.3" />
-        <Badge color={C.amber} label="Precaución 1.3–1.5" />
-        <Badge color={C.red} label="Overload &gt;1.5" />
-      </div>
-      <ResponsiveContainer width="100%" height={200}>
-        <ComposedChart data={withACWR} margin={{ top: 4, right: 16, bottom: 0, left: -10 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-          <XAxis dataKey="date" tick={{ fill: C.dim, fontSize: 9, fontFamily: "'Space Mono'" }} />
-          <YAxis domain={[0, 2.2]} tick={{ fill: C.dim, fontSize: 9 }} />
-          <Tooltip {...MATCH_TT} />
-          <ReferenceLine y={1.5} stroke={C.red} strokeDasharray="4 2" />
-          <ReferenceLine y={0.8} stroke={C.amber} strokeDasharray="4 2" />
-          <Area dataKey="acwr" name="ACWR" fill={C.accent + "18"} stroke={C.accent} strokeWidth={2.5} dot={{ r: 4, fill: C.accent }} />
-        </ComposedChart>
-      </ResponsiveContainer>
-
-      <ST>HID ACTUAL vs EXPECTED HID — por tier del rival</ST>
-      <p style={{ color: C.dim, fontSize: 10, fontFamily: "'Space Mono', monospace", marginBottom: 12 }}>
-        Expected = mins × HID/min (Mateo avg) · T1 Elite: 17.0 · T2 Strong: 15.0 · T3 Medium: 13.0 · T4 Low: 12.0 m/min
-      </p>
-      <ResponsiveContainer width="100%" height={200}>
-        <ComposedChart data={lrData} margin={{ top: 4, right: 16, bottom: 0, left: -10 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-          <XAxis dataKey="date" tick={{ fill: C.dim, fontSize: 9, fontFamily: "'Space Mono'" }} />
-          <YAxis tick={{ fill: C.dim, fontSize: 9 }} />
-          <Tooltip {...MATCH_TT} />
-          <Legend wrapperStyle={{ fontSize: 10, color: C.dim, fontFamily: "'Space Mono'" }} />
-          <Bar dataKey="expected" name="Expected HID" fill={C.muted} radius={[3, 3, 0, 0]} />
-          <Bar dataKey="actual" name="HID Real" radius={[3, 3, 0, 0]}>
-            {lrData.map((d, i) => <Cell key={i} fill={loadRatioColor(d.ratio)} />)}
-          </Bar>
-        </ComposedChart>
-      </ResponsiveContainer>
-
-      <div style={{ marginTop: 10 }}>
-        <p style={{ color: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace", marginBottom: 8 }}>LOAD RATIO — HID Real / HID Expected</p>
-        <ResponsiveContainer width="100%" height={120}>
-          <LineChart data={lrData} margin={{ top: 4, right: 16, bottom: 0, left: -10 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-            <XAxis dataKey="date" tick={{ fill: C.dim, fontSize: 9, fontFamily: "'Space Mono'" }} />
-            <YAxis domain={[0, 2]} tick={{ fill: C.dim, fontSize: 9 }} />
-            <Tooltip {...MATCH_TT} />
-            <ReferenceLine y={1.35} stroke={C.red} strokeDasharray="4 2" />
-            <ReferenceLine y={0.75} stroke={C.purple} strokeDasharray="4 2" />
-            <Line dataKey="ratio" name="Load Ratio" stroke={C.orange} strokeWidth={2} dot={{ r: 4, fill: C.orange }} />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-
-      <ST>HID/min vs INTENSIDAD — perfil de carga competitiva</ST>
-      <ResponsiveContainer width="100%" height={200}>
-        <LineChart data={matches} margin={{ top: 4, right: 16, bottom: 0, left: -10 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-          <XAxis dataKey="date" tick={{ fill: C.dim, fontSize: 9, fontFamily: "'Space Mono'" }} />
-          <YAxis tick={{ fill: C.dim, fontSize: 9 }} />
-          <Tooltip {...MATCH_TT} />
-          <Legend wrapperStyle={{ fontSize: 10, color: C.dim, fontFamily: "'Space Mono'" }} />
-          <Line dataKey="hidMin" name="HID/min" stroke={C.orange} strokeWidth={2.5} dot={{ r: 4 }} />
-          <Line dataKey="intensity" name="Intensidad (m/min)" stroke={C.accent} strokeWidth={2} strokeDasharray="5 3" dot={{ r: 3 }} />
-        </LineChart>
-      </ResponsiveContainer>
-
-      {hasHR && (
-        <>
-          <ST>ZONAS DE FRECUENCIA CARDÍACA</ST>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={matches.filter(m => m.z1 + m.z2 + m.z3 + m.z4 + m.z5 > 0)} margin={{ top: 4, right: 16, bottom: 0, left: -10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-              <XAxis dataKey="date" tick={{ fill: C.dim, fontSize: 9, fontFamily: "'Space Mono'" }} />
-              <YAxis tick={{ fill: C.dim, fontSize: 9 }} />
-              <Tooltip {...MATCH_TT} />
-              <Legend wrapperStyle={{ fontSize: 10, color: C.dim, fontFamily: "'Space Mono'" }} />
-              <Bar dataKey="z1" name="Z1" stackId="hr" fill="#1e3349" />
-              <Bar dataKey="z2" name="Z2" stackId="hr" fill="#2d5a7a" />
-              <Bar dataKey="z3" name="Z3" stackId="hr" fill={C.amber} />
-              <Bar dataKey="z4" name="Z4" stackId="hr" fill={C.orange} />
-              <Bar dataKey="z5" name="Z5" stackId="hr" fill={C.red} />
-            </BarChart>
-          </ResponsiveContainer>
-        </>
-      )}
-
-      {hasAccel && (
-        <>
-          <ST>ACELERACIONES vs DESACELERACIONES — carga neuromuscular</ST>
-          <p style={{ color: C.dim, fontSize: 10, fontFamily: "'Space Mono', monospace", marginBottom: 10 }}>
-            Decel &gt; Accel en patrón sostenido = riesgo posterior (isquios). Monitorear.
-          </p>
-          <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={matches} margin={{ top: 4, right: 16, bottom: 0, left: -10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-              <XAxis dataKey="date" tick={{ fill: C.dim, fontSize: 9, fontFamily: "'Space Mono'" }} />
-              <YAxis tick={{ fill: C.dim, fontSize: 9 }} />
-              <Tooltip {...MATCH_TT} />
-              <Legend wrapperStyle={{ fontSize: 10, color: C.dim, fontFamily: "'Space Mono'" }} />
-              <Bar dataKey="accel" name="Aceleraciones" fill={C.green} radius={[3, 3, 0, 0]} />
-              <Bar dataKey="decel" name="Desaceleraciones" fill={C.red} radius={[3, 3, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </>
-      )}
-
-      <ST>LOG DE PARTIDOS</ST>
-      <div style={{ overflowX: "auto" }}>
-        <table>
-          <thead>
-            <tr>{["Fecha","Rival","T","MDI","Min","Result","G","A","Dist","Intens","HID","HID/min","xHID","Load Ratio","Work%","ACWR"].map(h => <th key={h}>{h}</th>)}</tr>
-          </thead>
-          <tbody>
-            {withACWR.map((m, i) => {
-              const lrC = loadRatioColor(m.loadRatio);
-              const aw = acwrColor(m.acwr);
-              const rc = m.result?.charAt(0) === "W" ? C.green : m.result?.charAt(0) === "D" ? C.amber : C.red;
-              return (
-                <tr key={i}>
-                  <td style={{ color: C.accent }}>{m.date}</td>
-                  <td style={{ color: C.text, whiteSpace: "nowrap" }}>{m.opponent}</td>
-                  <td style={{ color: C.dim }}>{m.tier}</td>
-                  <td style={{ color: C.text }}>{m.mdi?.toFixed(2)}</td>
-                  <td style={{ color: C.text }}>{m.mins}</td>
-                  <td style={{ color: rc, fontWeight: 700 }}>{m.result}</td>
-                  <td style={{ color: C.text }}>{m.goals}</td>
-                  <td style={{ color: C.text }}>{m.assists}</td>
-                  <td style={{ color: C.text }}>{m.totalDist?.toLocaleString()}</td>
-                  <td style={{ color: C.accent }}>{m.intensity}</td>
-                  <td style={{ color: C.text }}>{m.hid}</td>
-                  <td style={{ color: C.orange }}>{m.hidMin}</td>
-                  <td style={{ color: C.dim }}>{m.expHID ?? "—"}</td>
-                  <td style={{ color: lrC, fontWeight: 700 }}>{m.loadRatio ?? "—"}</td>
-                  <td style={{ color: m.workRate > 80 ? C.red : m.workRate > 60 ? C.amber : C.green }}>{m.workRate ? m.workRate + "%" : "—"}</td>
-                  <td style={{ color: aw, fontWeight: 700 }}>{m.acwr ?? "—"}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+  const lrData = withACWR.map(m => ({
+    date: m.date,
+    actual: m.hid,
+    expected: m.expHID,
+    ratio: m.loadRatio
+  }));
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(AlertBar, {
+    acwr: latest === null || latest === void 0 ? void 0 : latest.acwr,
+    loadRatio: latest === null || latest === void 0 ? void 0 : latest.loadRatio,
+    scope: "Partidos"
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      flexWrap: "wrap",
+      marginBottom: 4
+    }
+  }, /*#__PURE__*/React.createElement(KPI, {
+    label: "Partidos",
+    value: matches.length,
+    color: C.accent
+  }), /*#__PURE__*/React.createElement(KPI, {
+    label: "HID/min avg",
+    value: avg("hidMin"),
+    unit: "m/min",
+    color: C.orange
+  }), /*#__PURE__*/React.createElement(KPI, {
+    label: "Intensidad avg",
+    value: avg("intensity"),
+    unit: "m/min",
+    color: C.accent
+  }), /*#__PURE__*/React.createElement(KPI, {
+    label: "ACWR parcial partidos",
+    value: latest === null || latest === void 0 ? void 0 : latest.acwr,
+    color: acwrColor(latest === null || latest === void 0 ? void 0 : latest.acwr),
+    sub: acwrLabel(latest === null || latest === void 0 ? void 0 : latest.acwr)
+  }), /*#__PURE__*/React.createElement(KPI, {
+    label: "Load Ratio (últ)",
+    value: latest === null || latest === void 0 ? void 0 : latest.loadRatio,
+    color: loadRatioColor(latest === null || latest === void 0 ? void 0 : latest.loadRatio),
+    sub: loadRatioLabel(latest === null || latest === void 0 ? void 0 : latest.loadRatio)
+  })), /*#__PURE__*/React.createElement(ProgressSection, {
+    matches: matches
+  }), /*#__PURE__*/React.createElement(ST, null, "ACWR PARCIAL — solo partidos (ver banner superior para ACWR REAL)"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6,
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement(Badge, {
+    color: C.amber,
+    label: "Underload <0.8"
+  }), /*#__PURE__*/React.createElement(Badge, {
+    color: C.green,
+    label: "Óptimo 0.8–1.3"
+  }), /*#__PURE__*/React.createElement(Badge, {
+    color: C.amber,
+    label: "Precaución 1.3–1.5"
+  }), /*#__PURE__*/React.createElement(Badge, {
+    color: C.red,
+    label: "Overload >1.5"
+  })), /*#__PURE__*/React.createElement(ResponsiveContainer, {
+    width: "100%",
+    height: 200
+  }, /*#__PURE__*/React.createElement(ComposedChart, {
+    data: withACWR,
+    margin: {
+      top: 4,
+      right: 16,
+      bottom: 0,
+      left: -10
+    }
+  }, /*#__PURE__*/React.createElement(CartesianGrid, {
+    strokeDasharray: "3 3",
+    stroke: C.border
+  }), /*#__PURE__*/React.createElement(XAxis, {
+    dataKey: "date",
+    tick: {
+      fill: C.dim,
+      fontSize: 9,
+      fontFamily: "'Space Mono'"
+    }
+  }), /*#__PURE__*/React.createElement(YAxis, {
+    domain: [0, 2.2],
+    tick: {
+      fill: C.dim,
+      fontSize: 9
+    }
+  }), /*#__PURE__*/React.createElement(Tooltip, MATCH_TT), /*#__PURE__*/React.createElement(ReferenceLine, {
+    y: 1.5,
+    stroke: C.red,
+    strokeDasharray: "4 2"
+  }), /*#__PURE__*/React.createElement(ReferenceLine, {
+    y: 0.8,
+    stroke: C.amber,
+    strokeDasharray: "4 2"
+  }), /*#__PURE__*/React.createElement(Area, {
+    dataKey: "acwr",
+    name: "ACWR",
+    fill: C.accent + "18",
+    stroke: C.accent,
+    strokeWidth: 2.5,
+    dot: {
+      r: 4,
+      fill: C.accent
+    }
+  }))), /*#__PURE__*/React.createElement(ST, null, "HID ACTUAL vs EXPECTED HID — por tier del rival"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.dim,
+      fontSize: 10,
+      fontFamily: "'Space Mono', monospace",
+      marginBottom: 12
+    }
+  }, "Expected = mins × HID/min (Mateo avg) · T1 Elite: 17.0 · T2 Strong: 15.0 · T3 Medium: 13.0 · T4 Low: 12.0 m/min"), /*#__PURE__*/React.createElement(ResponsiveContainer, {
+    width: "100%",
+    height: 200
+  }, /*#__PURE__*/React.createElement(ComposedChart, {
+    data: lrData,
+    margin: {
+      top: 4,
+      right: 16,
+      bottom: 0,
+      left: -10
+    }
+  }, /*#__PURE__*/React.createElement(CartesianGrid, {
+    strokeDasharray: "3 3",
+    stroke: C.border
+  }), /*#__PURE__*/React.createElement(XAxis, {
+    dataKey: "date",
+    tick: {
+      fill: C.dim,
+      fontSize: 9,
+      fontFamily: "'Space Mono'"
+    }
+  }), /*#__PURE__*/React.createElement(YAxis, {
+    tick: {
+      fill: C.dim,
+      fontSize: 9
+    }
+  }), /*#__PURE__*/React.createElement(Tooltip, MATCH_TT), /*#__PURE__*/React.createElement(Legend, {
+    wrapperStyle: {
+      fontSize: 10,
+      color: C.dim,
+      fontFamily: "'Space Mono'"
+    }
+  }), /*#__PURE__*/React.createElement(Bar, {
+    dataKey: "expected",
+    name: "Expected HID",
+    fill: C.muted,
+    radius: [3, 3, 0, 0]
+  }), /*#__PURE__*/React.createElement(Bar, {
+    dataKey: "actual",
+    name: "HID Real",
+    radius: [3, 3, 0, 0]
+  }, lrData.map((d, i) => /*#__PURE__*/React.createElement(Cell, {
+    key: i,
+    fill: loadRatioColor(d.ratio)
+  }))))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 10
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.dim,
+      fontSize: 9,
+      fontFamily: "'Space Mono', monospace",
+      marginBottom: 8
+    }
+  }, "LOAD RATIO — HID Real / HID Expected"), /*#__PURE__*/React.createElement(ResponsiveContainer, {
+    width: "100%",
+    height: 120
+  }, /*#__PURE__*/React.createElement(LineChart, {
+    data: lrData,
+    margin: {
+      top: 4,
+      right: 16,
+      bottom: 0,
+      left: -10
+    }
+  }, /*#__PURE__*/React.createElement(CartesianGrid, {
+    strokeDasharray: "3 3",
+    stroke: C.border
+  }), /*#__PURE__*/React.createElement(XAxis, {
+    dataKey: "date",
+    tick: {
+      fill: C.dim,
+      fontSize: 9,
+      fontFamily: "'Space Mono'"
+    }
+  }), /*#__PURE__*/React.createElement(YAxis, {
+    domain: [0, 2],
+    tick: {
+      fill: C.dim,
+      fontSize: 9
+    }
+  }), /*#__PURE__*/React.createElement(Tooltip, MATCH_TT), /*#__PURE__*/React.createElement(ReferenceLine, {
+    y: 1.35,
+    stroke: C.red,
+    strokeDasharray: "4 2"
+  }), /*#__PURE__*/React.createElement(ReferenceLine, {
+    y: 0.75,
+    stroke: C.purple,
+    strokeDasharray: "4 2"
+  }), /*#__PURE__*/React.createElement(Line, {
+    dataKey: "ratio",
+    name: "Load Ratio",
+    stroke: C.orange,
+    strokeWidth: 2,
+    dot: {
+      r: 4,
+      fill: C.orange
+    }
+  })))), /*#__PURE__*/React.createElement(ST, null, "HID/min vs INTENSIDAD — perfil de carga competitiva"), /*#__PURE__*/React.createElement(ResponsiveContainer, {
+    width: "100%",
+    height: 200
+  }, /*#__PURE__*/React.createElement(LineChart, {
+    data: matches,
+    margin: {
+      top: 4,
+      right: 16,
+      bottom: 0,
+      left: -10
+    }
+  }, /*#__PURE__*/React.createElement(CartesianGrid, {
+    strokeDasharray: "3 3",
+    stroke: C.border
+  }), /*#__PURE__*/React.createElement(XAxis, {
+    dataKey: "date",
+    tick: {
+      fill: C.dim,
+      fontSize: 9,
+      fontFamily: "'Space Mono'"
+    }
+  }), /*#__PURE__*/React.createElement(YAxis, {
+    tick: {
+      fill: C.dim,
+      fontSize: 9
+    }
+  }), /*#__PURE__*/React.createElement(Tooltip, MATCH_TT), /*#__PURE__*/React.createElement(Legend, {
+    wrapperStyle: {
+      fontSize: 10,
+      color: C.dim,
+      fontFamily: "'Space Mono'"
+    }
+  }), /*#__PURE__*/React.createElement(Line, {
+    dataKey: "hidMin",
+    name: "HID/min",
+    stroke: C.orange,
+    strokeWidth: 2.5,
+    dot: {
+      r: 4
+    }
+  }), /*#__PURE__*/React.createElement(Line, {
+    dataKey: "intensity",
+    name: "Intensidad (m/min)",
+    stroke: C.accent,
+    strokeWidth: 2,
+    strokeDasharray: "5 3",
+    dot: {
+      r: 3
+    }
+  }))), hasHR && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(ST, null, "ZONAS DE FRECUENCIA CARDÍACA"), /*#__PURE__*/React.createElement(ResponsiveContainer, {
+    width: "100%",
+    height: 200
+  }, /*#__PURE__*/React.createElement(BarChart, {
+    data: matches.filter(m => m.z1 + m.z2 + m.z3 + m.z4 + m.z5 > 0),
+    margin: {
+      top: 4,
+      right: 16,
+      bottom: 0,
+      left: -10
+    }
+  }, /*#__PURE__*/React.createElement(CartesianGrid, {
+    strokeDasharray: "3 3",
+    stroke: C.border
+  }), /*#__PURE__*/React.createElement(XAxis, {
+    dataKey: "date",
+    tick: {
+      fill: C.dim,
+      fontSize: 9,
+      fontFamily: "'Space Mono'"
+    }
+  }), /*#__PURE__*/React.createElement(YAxis, {
+    tick: {
+      fill: C.dim,
+      fontSize: 9
+    }
+  }), /*#__PURE__*/React.createElement(Tooltip, MATCH_TT), /*#__PURE__*/React.createElement(Legend, {
+    wrapperStyle: {
+      fontSize: 10,
+      color: C.dim,
+      fontFamily: "'Space Mono'"
+    }
+  }), /*#__PURE__*/React.createElement(Bar, {
+    dataKey: "z1",
+    name: "Z1",
+    stackId: "hr",
+    fill: "#1e3349"
+  }), /*#__PURE__*/React.createElement(Bar, {
+    dataKey: "z2",
+    name: "Z2",
+    stackId: "hr",
+    fill: "#2d5a7a"
+  }), /*#__PURE__*/React.createElement(Bar, {
+    dataKey: "z3",
+    name: "Z3",
+    stackId: "hr",
+    fill: C.amber
+  }), /*#__PURE__*/React.createElement(Bar, {
+    dataKey: "z4",
+    name: "Z4",
+    stackId: "hr",
+    fill: C.orange
+  }), /*#__PURE__*/React.createElement(Bar, {
+    dataKey: "z5",
+    name: "Z5",
+    stackId: "hr",
+    fill: C.red
+  })))), hasAccel && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(ST, null, "ACELERACIONES vs DESACELERACIONES — carga neuromuscular"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.dim,
+      fontSize: 10,
+      fontFamily: "'Space Mono', monospace",
+      marginBottom: 10
+    }
+  }, "Decel > Accel en patrón sostenido = riesgo posterior (isquios). Monitorear."), /*#__PURE__*/React.createElement(ResponsiveContainer, {
+    width: "100%",
+    height: 180
+  }, /*#__PURE__*/React.createElement(BarChart, {
+    data: matches,
+    margin: {
+      top: 4,
+      right: 16,
+      bottom: 0,
+      left: -10
+    }
+  }, /*#__PURE__*/React.createElement(CartesianGrid, {
+    strokeDasharray: "3 3",
+    stroke: C.border
+  }), /*#__PURE__*/React.createElement(XAxis, {
+    dataKey: "date",
+    tick: {
+      fill: C.dim,
+      fontSize: 9,
+      fontFamily: "'Space Mono'"
+    }
+  }), /*#__PURE__*/React.createElement(YAxis, {
+    tick: {
+      fill: C.dim,
+      fontSize: 9
+    }
+  }), /*#__PURE__*/React.createElement(Tooltip, MATCH_TT), /*#__PURE__*/React.createElement(Legend, {
+    wrapperStyle: {
+      fontSize: 10,
+      color: C.dim,
+      fontFamily: "'Space Mono'"
+    }
+  }), /*#__PURE__*/React.createElement(Bar, {
+    dataKey: "accel",
+    name: "Aceleraciones",
+    fill: C.green,
+    radius: [3, 3, 0, 0]
+  }), /*#__PURE__*/React.createElement(Bar, {
+    dataKey: "decel",
+    name: "Desaceleraciones",
+    fill: C.red,
+    radius: [3, 3, 0, 0]
+  })))), /*#__PURE__*/React.createElement(ST, null, "LOG DE PARTIDOS"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      overflowX: "auto"
+    }
+  }, /*#__PURE__*/React.createElement("table", null, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, ["Fecha", "Rival", "T", "MDI", "Min", "Result", "G", "A", "Dist", "Intens", "HID", "HID/min", "xHID", "Load Ratio", "Work%", "ACWR"].map(h => /*#__PURE__*/React.createElement("th", {
+    key: h
+  }, h)))), /*#__PURE__*/React.createElement("tbody", null, withACWR.map((m, i) => {
+    var _m$result, _m$result2, _m$mdi, _m$totalDist, _m$expHID, _m$loadRatio, _m$acwr;
+    const lrC = loadRatioColor(m.loadRatio);
+    const aw = acwrColor(m.acwr);
+    const rc = ((_m$result = m.result) === null || _m$result === void 0 ? void 0 : _m$result.charAt(0)) === "W" ? C.green : ((_m$result2 = m.result) === null || _m$result2 === void 0 ? void 0 : _m$result2.charAt(0)) === "D" ? C.amber : C.red;
+    return /*#__PURE__*/React.createElement("tr", {
+      key: i
+    }, /*#__PURE__*/React.createElement("td", {
+      style: {
+        color: C.accent
+      }
+    }, m.date), /*#__PURE__*/React.createElement("td", {
+      style: {
+        color: C.text,
+        whiteSpace: "nowrap"
+      }
+    }, m.opponent), /*#__PURE__*/React.createElement("td", {
+      style: {
+        color: C.dim
+      }
+    }, m.tier), /*#__PURE__*/React.createElement("td", {
+      style: {
+        color: C.text
+      }
+    }, (_m$mdi = m.mdi) === null || _m$mdi === void 0 ? void 0 : _m$mdi.toFixed(2)), /*#__PURE__*/React.createElement("td", {
+      style: {
+        color: C.text
+      }
+    }, m.mins), /*#__PURE__*/React.createElement("td", {
+      style: {
+        color: rc,
+        fontWeight: 700
+      }
+    }, m.result), /*#__PURE__*/React.createElement("td", {
+      style: {
+        color: C.text
+      }
+    }, m.goals), /*#__PURE__*/React.createElement("td", {
+      style: {
+        color: C.text
+      }
+    }, m.assists), /*#__PURE__*/React.createElement("td", {
+      style: {
+        color: C.text
+      }
+    }, (_m$totalDist = m.totalDist) === null || _m$totalDist === void 0 ? void 0 : _m$totalDist.toLocaleString()), /*#__PURE__*/React.createElement("td", {
+      style: {
+        color: C.accent
+      }
+    }, m.intensity), /*#__PURE__*/React.createElement("td", {
+      style: {
+        color: C.text
+      }
+    }, m.hid), /*#__PURE__*/React.createElement("td", {
+      style: {
+        color: C.orange
+      }
+    }, m.hidMin), /*#__PURE__*/React.createElement("td", {
+      style: {
+        color: C.dim
+      }
+    }, (_m$expHID = m.expHID) !== null && _m$expHID !== void 0 ? _m$expHID : "—"), /*#__PURE__*/React.createElement("td", {
+      style: {
+        color: lrC,
+        fontWeight: 700
+      }
+    }, (_m$loadRatio = m.loadRatio) !== null && _m$loadRatio !== void 0 ? _m$loadRatio : "—"), /*#__PURE__*/React.createElement("td", {
+      style: {
+        color: m.workRate > 80 ? C.red : m.workRate > 60 ? C.amber : C.green
+      }
+    }, m.workRate ? m.workRate + "%" : "—"), /*#__PURE__*/React.createElement("td", {
+      style: {
+        color: aw,
+        fontWeight: 700
+      }
+    }, (_m$acwr = m.acwr) !== null && _m$acwr !== void 0 ? _m$acwr : "—"));
+  })))));
 }
 
 // SEED training — fallback cuando WEEKPRACTICE_LOG CSV no esté disponible
-const TRAINING_SEED = [
-  { source: "training", date: "Mar 31", dateObj: new Date("2026-03-31"), rawDate: "2026-03-31", type: "Training", mins: 89, totalDist: 4201, intensity: 79, hid: 366, hidMin: 4.11, sprints: 4, maxSpeed: 6.01, rpe: 6, load: 534, z1: 11, z2: 29, z3: 29, z4: 16, z5: 4, accel: 0, decel: 0, avgHR: 0, maxHR: 0 },
-  { source: "training", date: "Abr 1", dateObj: new Date("2026-04-01"), rawDate: "2026-04-01", type: "Training", mins: 91, totalDist: 6639, intensity: 73, hid: 1163, hidMin: 13.0, sprints: 21, maxSpeed: 7.75, rpe: 8, load: 728, z1: 23, z2: 18, z3: 25, z4: 17, z5: 8, accel: 0, decel: 0, avgHR: 0, maxHR: 0 },
-  { source: "training", date: "Abr 7", dateObj: new Date("2026-04-07"), rawDate: "2026-04-07", type: "Training", mins: 82, totalDist: 3536, intensity: 43, hid: 339, hidMin: 4.13, sprints: 5, maxSpeed: 6.23, rpe: 6.5, load: 533, z1: 22, z2: 30, z3: 17, z4: 10, z5: 4, accel: 45, decel: 28, avgHR: 129, maxHR: 187 },
-  { source: "training", date: "Abr 21", dateObj: new Date("2026-04-21"), rawDate: "2026-04-21", type: "Training", mins: 92, totalDist: 3587, intensity: 39, hid: 341, hidMin: 3.71, sprints: 1, maxSpeed: 5.99, rpe: 3, load: 276, z1: 36, z2: 18, z3: 32, z4: 7, z5: 0, accel: 48, decel: 21, avgHR: 125, maxHR: 164 },
-  { source: "training", date: "Abr 22", dateObj: new Date("2026-04-22"), rawDate: "2026-04-22", type: "Training", mins: 86, totalDist: 5047, intensity: 59, hid: 734, hidMin: 8.53, sprints: 13, maxSpeed: 8.11, rpe: 4, load: 344, z1: 34, z2: 21, z3: 26, z4: 5, z5: 1, accel: 58, decel: 51, avgHR: 127, maxHR: 183 },
-  { source: "training", date: "May 6", dateObj: new Date("2026-05-06"), rawDate: "2026-05-06", type: "Training", mins: 85, totalDist: 5093, intensity: 60, hid: 999, hidMin: 11.75, sprints: 17, maxSpeed: 7.08, rpe: 8, load: 680, z1: 50, z2: 1, z3: 12, z4: 15, z5: 7, accel: 30, decel: 34, avgHR: 158, maxHR: 188 },
-  { source: "training", date: "May 7", dateObj: new Date("2026-05-07"), rawDate: "2026-05-07", type: "Training", mins: 99, totalDist: 7092, intensity: 72, hid: 1023, hidMin: 10.33, sprints: 24, maxSpeed: 6.91, rpe: 5, load: 495, z1: 18, z2: 11, z3: 41, z4: 15, z5: 14, accel: 78, decel: 67, avgHR: 150, maxHR: 194 },
-  { source: "training", date: "May 11", dateObj: new Date("2026-05-11"), rawDate: "2026-05-11", type: "Training", mins: 84, totalDist: 4394, intensity: 52, hid: 716, hidMin: 8.52, sprints: 17, maxSpeed: 6.99, rpe: 7, load: 588, z1: 18, z2: 32, z3: 18, z4: 11, z5: 6, accel: 43, decel: 45, avgHR: 136, maxHR: 186 },
-];
+const TRAINING_SEED = [{
+  source: "training",
+  date: "Mar 31",
+  dateObj: new Date("2026-03-31"),
+  rawDate: "2026-03-31",
+  type: "Training",
+  mins: 89,
+  totalDist: 4201,
+  intensity: 79,
+  hid: 366,
+  hidMin: 4.11,
+  sprints: 4,
+  maxSpeed: 6.01,
+  rpe: 6,
+  load: 534,
+  z1: 11,
+  z2: 29,
+  z3: 29,
+  z4: 16,
+  z5: 4,
+  accel: 0,
+  decel: 0,
+  avgHR: 0,
+  maxHR: 0
+}, {
+  source: "training",
+  date: "Abr 1",
+  dateObj: new Date("2026-04-01"),
+  rawDate: "2026-04-01",
+  type: "Training",
+  mins: 91,
+  totalDist: 6639,
+  intensity: 73,
+  hid: 1163,
+  hidMin: 13.0,
+  sprints: 21,
+  maxSpeed: 7.75,
+  rpe: 8,
+  load: 728,
+  z1: 23,
+  z2: 18,
+  z3: 25,
+  z4: 17,
+  z5: 8,
+  accel: 0,
+  decel: 0,
+  avgHR: 0,
+  maxHR: 0
+}, {
+  source: "training",
+  date: "Abr 7",
+  dateObj: new Date("2026-04-07"),
+  rawDate: "2026-04-07",
+  type: "Training",
+  mins: 82,
+  totalDist: 3536,
+  intensity: 43,
+  hid: 339,
+  hidMin: 4.13,
+  sprints: 5,
+  maxSpeed: 6.23,
+  rpe: 6.5,
+  load: 533,
+  z1: 22,
+  z2: 30,
+  z3: 17,
+  z4: 10,
+  z5: 4,
+  accel: 45,
+  decel: 28,
+  avgHR: 129,
+  maxHR: 187
+}, {
+  source: "training",
+  date: "Abr 21",
+  dateObj: new Date("2026-04-21"),
+  rawDate: "2026-04-21",
+  type: "Training",
+  mins: 92,
+  totalDist: 3587,
+  intensity: 39,
+  hid: 341,
+  hidMin: 3.71,
+  sprints: 1,
+  maxSpeed: 5.99,
+  rpe: 3,
+  load: 276,
+  z1: 36,
+  z2: 18,
+  z3: 32,
+  z4: 7,
+  z5: 0,
+  accel: 48,
+  decel: 21,
+  avgHR: 125,
+  maxHR: 164
+}, {
+  source: "training",
+  date: "Abr 22",
+  dateObj: new Date("2026-04-22"),
+  rawDate: "2026-04-22",
+  type: "Training",
+  mins: 86,
+  totalDist: 5047,
+  intensity: 59,
+  hid: 734,
+  hidMin: 8.53,
+  sprints: 13,
+  maxSpeed: 8.11,
+  rpe: 4,
+  load: 344,
+  z1: 34,
+  z2: 21,
+  z3: 26,
+  z4: 5,
+  z5: 1,
+  accel: 58,
+  decel: 51,
+  avgHR: 127,
+  maxHR: 183
+}, {
+  source: "training",
+  date: "May 6",
+  dateObj: new Date("2026-05-06"),
+  rawDate: "2026-05-06",
+  type: "Training",
+  mins: 85,
+  totalDist: 5093,
+  intensity: 60,
+  hid: 999,
+  hidMin: 11.75,
+  sprints: 17,
+  maxSpeed: 7.08,
+  rpe: 8,
+  load: 680,
+  z1: 50,
+  z2: 1,
+  z3: 12,
+  z4: 15,
+  z5: 7,
+  accel: 30,
+  decel: 34,
+  avgHR: 158,
+  maxHR: 188
+}, {
+  source: "training",
+  date: "May 7",
+  dateObj: new Date("2026-05-07"),
+  rawDate: "2026-05-07",
+  type: "Training",
+  mins: 99,
+  totalDist: 7092,
+  intensity: 72,
+  hid: 1023,
+  hidMin: 10.33,
+  sprints: 24,
+  maxSpeed: 6.91,
+  rpe: 5,
+  load: 495,
+  z1: 18,
+  z2: 11,
+  z3: 41,
+  z4: 15,
+  z5: 14,
+  accel: 78,
+  decel: 67,
+  avgHR: 150,
+  maxHR: 194
+}, {
+  source: "training",
+  date: "May 11",
+  dateObj: new Date("2026-05-11"),
+  rawDate: "2026-05-11",
+  type: "Training",
+  mins: 84,
+  totalDist: 4394,
+  intensity: 52,
+  hid: 716,
+  hidMin: 8.52,
+  sprints: 17,
+  maxSpeed: 6.99,
+  rpe: 7,
+  load: 588,
+  z1: 18,
+  z2: 32,
+  z3: 18,
+  z4: 11,
+  z5: 6,
+  accel: 43,
+  decel: 45,
+  avgHR: 136,
+  maxHR: 186
+}];
 
 // ───── TRAINING FORM — ahora genera línea TAB para pegar en Sheet ─────────
 function TrainingLineGenerator() {
   const [f, setF] = useState({
-    date: "", weekStart: "", day: "", type: "Training", name: "",
-    mins: 70, hid: "", totalDist: "", intensity: "",
-    hsr: "", sprints: "", accel: "", decel: "", maxSpeed: "",
-    rpe: 6, avgHR: "", maxHR: "",
-    z1: "", z2: "", z3: "", z4: "", z5: ""
+    date: "",
+    weekStart: "",
+    day: "",
+    type: "Training",
+    name: "",
+    mins: 70,
+    hid: "",
+    totalDist: "",
+    intensity: "",
+    hsr: "",
+    sprints: "",
+    accel: "",
+    decel: "",
+    maxSpeed: "",
+    rpe: 6,
+    avgHR: "",
+    maxHR: "",
+    z1: "",
+    z2: "",
+    z3: "",
+    z4: "",
+    z5: ""
   });
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-
-  const field = (key, lbl, type = "number", step = "1") => (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <label style={{ color: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace", letterSpacing: 1 }}>{lbl}</label>
-      <input type={type} step={step} value={f[key]} onChange={e => setF(p => ({ ...p, [key]: e.target.value }))} />
-    </div>
-  );
-
+  const field = (key, lbl, type = "number", step = "1") => /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 4
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: {
+      color: C.dim,
+      fontSize: 9,
+      fontFamily: "'Space Mono', monospace",
+      letterSpacing: 1
+    }
+  }, lbl), /*#__PURE__*/React.createElement("input", {
+    type: type,
+    step: step,
+    value: f[key],
+    onChange: e => setF(p => ({
+      ...p,
+      [key]: e.target.value
+    }))
+  }));
   const genLine = () => {
     const mins = parseFloat(f.mins) || 0;
     const hid = parseFloat(f.hid) || 0;
     const hidMin = mins && hid ? (hid / mins).toFixed(2) : "";
     const z4z5 = (parseFloat(f.z4) || 0) + (parseFloat(f.z5) || 0);
     // Orden WEEKPRACTICE_LOG: A..X
-    const cols = [
-      f.date, f.weekStart, f.day, f.type, f.name,
-      f.mins, f.hid, hidMin, f.totalDist, f.intensity,
-      f.hsr, f.sprints, f.accel, f.decel, f.maxSpeed,
-      f.rpe, f.avgHR, f.maxHR,
-      f.z1, f.z2, f.z3, f.z4, f.z5, z4z5 || ""
-    ];
+    const cols = [f.date, f.weekStart, f.day, f.type, f.name, f.mins, f.hid, hidMin, f.totalDist, f.intensity, f.hsr, f.sprints, f.accel, f.decel, f.maxSpeed, f.rpe, f.avgHR, f.maxHR, f.z1, f.z2, f.z3, f.z4, f.z5, z4z5 || ""];
     return cols.map(v => v === null || v === undefined ? "" : String(v)).join("\t");
   };
-
   const copyLine = () => {
     const line = genLine();
     if (navigator.clipboard) {
@@ -626,466 +1490,1651 @@ function TrainingLineGenerator() {
       });
     }
   };
-
-  return (
-    <div style={{ marginBottom: 20 }}>
-      <button onClick={() => setOpen(o => !o)} style={{ background: open ? "transparent" : C.accent, color: open ? C.dim : "#000", border: `1px solid ${open ? C.border : C.accent}`, borderRadius: 7, padding: "8px 18px", fontFamily: "'Space Mono', monospace", fontSize: 11, cursor: "pointer" }}>
-        {open ? "✕ Cerrar" : "+ Generar línea TAB para WEEKPRACTICE_LOG"}
-      </button>
-      {open && (
-        <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, marginTop: 12 }}>
-          <p style={{ color: C.accent, fontFamily: "'Space Mono', monospace", fontSize: 10, marginBottom: 6, letterSpacing: 2 }}>GENERAR LÍNEA PARA SHEET · WEEKPRACTICE_LOG · COLUMNAS A→X</p>
-          <p style={{ color: C.dim, fontFamily: "'Space Mono', monospace", fontSize: 9, marginBottom: 14 }}>
-            Los entrenamientos viven en el Sheet (fuente única). Llena los campos, copia la línea, pega en la siguiente fila vacía de WEEKPRACTICE_LOG (Ctrl+V en celda A[fila]).
-          </p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 12 }}>
-            {field("date", "A · Session Date", "date")}
-            {field("weekStart", "B · Week Start", "date")}
-            {field("day", "C · Day (Mon/Tue...)", "text")}
-            {field("type", "D · Type", "text")}
-            {field("name", "E · Name", "text")}
-            {field("mins", "F · Minutes")}
-            {field("hid", "G · HID")}
-            {field("totalDist", "I · Total Dist")}
-            {field("intensity", "J · Intensity")}
-            {field("hsr", "K · HSR")}
-            {field("sprints", "L · Sprints")}
-            {field("accel", "M · Accel")}
-            {field("decel", "N · Decel")}
-            {field("maxSpeed", "O · Max Speed", "number", "0.01")}
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <label style={{ color: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace", letterSpacing: 1 }}>P · RPE (1–10)</label>
-              <input type="range" min={1} max={10} step="0.5" value={f.rpe} onChange={e => setF(p => ({ ...p, rpe: e.target.value }))} />
-              <span style={{ color: C.accent, fontFamily: "'Space Mono', monospace", fontSize: 13, fontWeight: 700 }}>{f.rpe} / 10</span>
-            </div>
-            {field("avgHR", "Q · Avg HR")}
-            {field("maxHR", "R · Max HR")}
-            {field("z1", "S · Z1 min")}
-            {field("z2", "T · Z2 min")}
-            {field("z3", "U · Z3 min")}
-            {field("z4", "V · Z4 min")}
-            {field("z5", "W · Z5 min")}
-          </div>
-          <div style={{ marginTop: 18, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: "10px 12px" }}>
-            <p style={{ color: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace", letterSpacing: 2, marginBottom: 6 }}>LÍNEA GENERADA</p>
-            <p style={{ color: C.text, fontFamily: "'Space Mono', monospace", fontSize: 10, wordBreak: "break-all" }}>{genLine()}</p>
-          </div>
-          <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
-            <button onClick={copyLine} style={{ background: copied ? C.green : C.accent, color: "#000", border: "none", borderRadius: 8, padding: "10px 22px", fontFamily: "'Space Mono', monospace", fontSize: 11, cursor: "pointer", fontWeight: 700 }}>
-              {copied ? "✓ COPIADO — pega en WEEKPRACTICE_LOG" : "📋 Copiar línea TAB"}
-            </button>
-            <a href={`https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit`} target="_blank" rel="noopener" style={{ background: "transparent", color: C.accent, border: `1px solid ${C.accent}`, borderRadius: 8, padding: "10px 22px", fontFamily: "'Space Mono', monospace", fontSize: 11, textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
-              Abrir Sheet →
-            </a>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 20
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setOpen(o => !o),
+    style: {
+      background: open ? "transparent" : C.accent,
+      color: open ? C.dim : "#000",
+      border: `1px solid ${open ? C.border : C.accent}`,
+      borderRadius: 7,
+      padding: "8px 18px",
+      fontFamily: "'Space Mono', monospace",
+      fontSize: 11,
+      cursor: "pointer"
+    }
+  }, open ? "✕ Cerrar" : "+ Generar línea TAB para WEEKPRACTICE_LOG"), open && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.panel,
+      border: `1px solid ${C.border}`,
+      borderRadius: 12,
+      padding: 20,
+      marginTop: 12
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.accent,
+      fontFamily: "'Space Mono', monospace",
+      fontSize: 10,
+      marginBottom: 6,
+      letterSpacing: 2
+    }
+  }, "GENERAR LÍNEA PARA SHEET · WEEKPRACTICE_LOG · COLUMNAS A→X"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.dim,
+      fontFamily: "'Space Mono', monospace",
+      fontSize: 9,
+      marginBottom: 14
+    }
+  }, "Los entrenamientos viven en el Sheet (fuente única). Llena los campos, copia la línea, pega en la siguiente fila vacía de WEEKPRACTICE_LOG (Ctrl+V en celda A[fila])."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
+      gap: 12
+    }
+  }, field("date", "A · Session Date", "date"), field("weekStart", "B · Week Start", "date"), field("day", "C · Day (Mon/Tue...)", "text"), field("type", "D · Type", "text"), field("name", "E · Name", "text"), field("mins", "F · Minutes"), field("hid", "G · HID"), field("totalDist", "I · Total Dist"), field("intensity", "J · Intensity"), field("hsr", "K · HSR"), field("sprints", "L · Sprints"), field("accel", "M · Accel"), field("decel", "N · Decel"), field("maxSpeed", "O · Max Speed", "number", "0.01"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 4
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: {
+      color: C.dim,
+      fontSize: 9,
+      fontFamily: "'Space Mono', monospace",
+      letterSpacing: 1
+    }
+  }, "P · RPE (1–10)"), /*#__PURE__*/React.createElement("input", {
+    type: "range",
+    min: 1,
+    max: 10,
+    step: "0.5",
+    value: f.rpe,
+    onChange: e => setF(p => ({
+      ...p,
+      rpe: e.target.value
+    }))
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: C.accent,
+      fontFamily: "'Space Mono', monospace",
+      fontSize: 13,
+      fontWeight: 700
+    }
+  }, f.rpe, " / 10")), field("avgHR", "Q · Avg HR"), field("maxHR", "R · Max HR"), field("z1", "S · Z1 min"), field("z2", "T · Z2 min"), field("z3", "U · Z3 min"), field("z4", "V · Z4 min"), field("z5", "W · Z5 min")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 18,
+      background: C.bg,
+      border: `1px solid ${C.border}`,
+      borderRadius: 7,
+      padding: "10px 12px"
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.dim,
+      fontSize: 9,
+      fontFamily: "'Space Mono', monospace",
+      letterSpacing: 2,
+      marginBottom: 6
+    }
+  }, "LÍNEA GENERADA"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.text,
+      fontFamily: "'Space Mono', monospace",
+      fontSize: 10,
+      wordBreak: "break-all"
+    }
+  }, genLine())), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      marginTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: copyLine,
+    style: {
+      background: copied ? C.green : C.accent,
+      color: "#000",
+      border: "none",
+      borderRadius: 8,
+      padding: "10px 22px",
+      fontFamily: "'Space Mono', monospace",
+      fontSize: 11,
+      cursor: "pointer",
+      fontWeight: 700
+    }
+  }, copied ? "✓ COPIADO — pega en WEEKPRACTICE_LOG" : "📋 Copiar línea TAB"), /*#__PURE__*/React.createElement("a", {
+    href: `https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit`,
+    target: "_blank",
+    rel: "noopener",
+    style: {
+      background: "transparent",
+      color: C.accent,
+      border: `1px solid ${C.accent}`,
+      borderRadius: 8,
+      padding: "10px 22px",
+      fontFamily: "'Space Mono', monospace",
+      fontSize: 11,
+      textDecoration: "none",
+      display: "inline-flex",
+      alignItems: "center"
+    }
+  }, "Abrir Sheet →"))));
 }
-
-function TrainingTab({ sessions, liveFromSheet }) {
+function TrainingTab({
+  sessions,
+  liveFromSheet
+}) {
   const withACWR = useMemo(() => computeACWR(sessions), [sessions]);
   const latest = withACWR[withACWR.length - 1];
   const avg = arr => arr.filter(Boolean).length ? +(arr.filter(Boolean).reduce((a, b) => a + b, 0) / arr.filter(Boolean).length).toFixed(2) : null;
   const totalLoad = sessions.reduce((a, s) => a + s.load, 0);
-  if (!sessions.length) return <div><TrainingLineGenerator /><div style={{ textAlign: "center", padding: "60px 0", color: C.dim, fontFamily: "'Space Mono', monospace", fontSize: 12 }}>No hay sesiones.<br /><span style={{ color: C.accent }}>Genera la primera línea arriba y pégala al Sheet</span></div></div>;
-  return (
-    <div>
-      <TrainingLineGenerator />
-      {!liveFromSheet && (
-        <div style={{ background: C.amber + "15", border: `1px solid ${C.amber}55`, borderRadius: 8, padding: "10px 14px", marginBottom: 14, color: C.amber, fontFamily: "'Space Mono', monospace", fontSize: 10 }}>
-          ⚠ Training data viene del SEED embebido. Para leer en vivo desde WEEKPRACTICE_LOG, configurar TRAINING_GID en index.html.
-        </div>
-      )}
-      <AlertBar acwr={latest?.acwr} scope="Training" />
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
-        <KPI label="Sesiones" value={sessions.length} color={C.accent} />
-        <KPI label="Max Speed avg" value={avg(sessions.map(s => s.maxSpeed))} unit="m/s" color={C.green} />
-        <KPI label="HID avg" value={avg(sessions.map(s => s.hid))} unit="m" color={C.orange} />
-        <KPI label="Carga total" value={totalLoad} unit="UA" color={C.amber} sub="RPE × min" />
-      </div>
-      <ST>ACWR PARCIAL — solo training (ver banner superior para ACWR REAL)</ST>
-      <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
-        <Badge color={C.amber} label="Underload" /><Badge color={C.green} label="Óptimo" /><Badge color={C.amber} label="Precaución" /><Badge color={C.red} label="Overload" />
-      </div>
-      <ResponsiveContainer width="100%" height={200}>
-        <ComposedChart data={withACWR} margin={{ top: 4, right: 16, bottom: 0, left: -10 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-          <XAxis dataKey="date" tick={{ fill: C.dim, fontSize: 9, fontFamily: "'Space Mono'" }} />
-          <YAxis domain={[0, 2.2]} tick={{ fill: C.dim, fontSize: 9 }} />
-          <Tooltip {...TOOLTIP} />
-          <ReferenceLine y={1.5} stroke={C.red} strokeDasharray="4 2" />
-          <ReferenceLine y={0.8} stroke={C.amber} strokeDasharray="4 2" />
-          <Area dataKey="acwr" name="ACWR" fill={C.accent + "18"} stroke={C.accent} strokeWidth={2.5} dot={{ r: 4, fill: C.accent }} />
-        </ComposedChart>
-      </ResponsiveContainer>
-      <ST>CARGA POR SESIÓN (RPE × min)</ST>
-      <ResponsiveContainer width="100%" height={180}>
-        <BarChart data={withACWR} margin={{ top: 4, right: 16, bottom: 0, left: -10 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-          <XAxis dataKey="date" tick={{ fill: C.dim, fontSize: 9, fontFamily: "'Space Mono'" }} />
-          <YAxis tick={{ fill: C.dim, fontSize: 9 }} />
-          <Tooltip {...TOOLTIP} />
-          <Bar dataKey="load" name="Carga (UA)" radius={[4, 4, 0, 0]}>{withACWR.map((s, i) => <Cell key={i} fill={acwrColor(s.acwr)} />)}</Bar>
-        </BarChart>
-      </ResponsiveContainer>
-      <ST>LOG DE SESIONES</ST>
-      <div style={{ overflowX: "auto" }}>
-        <table>
-          <thead>
-            <tr>{["Fecha","Tipo","Min","HID","HID/min","Dist","Intens","Sprints","ACWR"].map(h => <th key={h}>{h}</th>)}</tr>
-          </thead>
-          <tbody>
-            {withACWR.map((s, i) => (
-              <tr key={i}>
-                <td style={{ color: C.accent }}>{s.date}</td>
-                <td style={{ color: C.text, whiteSpace: "nowrap" }}>{s.type}</td>
-                <td style={{ color: C.text }}>{s.mins}</td>
-                <td style={{ color: C.text }}>{s.hid}</td>
-                <td style={{ color: C.orange }}>{s.hidMin}</td>
-                <td style={{ color: C.text }}>{s.totalDist?.toLocaleString()}</td>
-                <td style={{ color: C.accent }}>{s.intensity}</td>
-                <td style={{ color: C.text }}>{s.sprints}</td>
-                <td style={{ color: acwrColor(s.acwr), fontWeight: 700 }}>{s.acwr ?? "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+  if (!sessions.length) return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(TrainingLineGenerator, null), /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "60px 0",
+      color: C.dim,
+      fontFamily: "'Space Mono', monospace",
+      fontSize: 12
+    }
+  }, "No hay sesiones.", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: C.accent
+    }
+  }, "Genera la primera línea arriba y pégala al Sheet")));
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(TrainingLineGenerator, null), !liveFromSheet && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.amber + "15",
+      border: `1px solid ${C.amber}55`,
+      borderRadius: 8,
+      padding: "10px 14px",
+      marginBottom: 14,
+      color: C.amber,
+      fontFamily: "'Space Mono', monospace",
+      fontSize: 10
+    }
+  }, "⚠ Training data viene del SEED embebido. Para leer en vivo desde WEEKPRACTICE_LOG, configurar TRAINING_GID en index.html."), /*#__PURE__*/React.createElement(AlertBar, {
+    acwr: latest === null || latest === void 0 ? void 0 : latest.acwr,
+    scope: "Training"
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      flexWrap: "wrap",
+      marginBottom: 4
+    }
+  }, /*#__PURE__*/React.createElement(KPI, {
+    label: "Sesiones",
+    value: sessions.length,
+    color: C.accent
+  }), /*#__PURE__*/React.createElement(KPI, {
+    label: "Max Speed avg",
+    value: avg(sessions.map(s => s.maxSpeed)),
+    unit: "m/s",
+    color: C.green
+  }), /*#__PURE__*/React.createElement(KPI, {
+    label: "HID avg",
+    value: avg(sessions.map(s => s.hid)),
+    unit: "m",
+    color: C.orange
+  }), /*#__PURE__*/React.createElement(KPI, {
+    label: "Carga total",
+    value: totalLoad,
+    unit: "UA",
+    color: C.amber,
+    sub: "RPE × min"
+  })), /*#__PURE__*/React.createElement(ST, null, "ACWR PARCIAL — solo training (ver banner superior para ACWR REAL)"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6,
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement(Badge, {
+    color: C.amber,
+    label: "Underload"
+  }), /*#__PURE__*/React.createElement(Badge, {
+    color: C.green,
+    label: "Óptimo"
+  }), /*#__PURE__*/React.createElement(Badge, {
+    color: C.amber,
+    label: "Precaución"
+  }), /*#__PURE__*/React.createElement(Badge, {
+    color: C.red,
+    label: "Overload"
+  })), /*#__PURE__*/React.createElement(ResponsiveContainer, {
+    width: "100%",
+    height: 200
+  }, /*#__PURE__*/React.createElement(ComposedChart, {
+    data: withACWR,
+    margin: {
+      top: 4,
+      right: 16,
+      bottom: 0,
+      left: -10
+    }
+  }, /*#__PURE__*/React.createElement(CartesianGrid, {
+    strokeDasharray: "3 3",
+    stroke: C.border
+  }), /*#__PURE__*/React.createElement(XAxis, {
+    dataKey: "date",
+    tick: {
+      fill: C.dim,
+      fontSize: 9,
+      fontFamily: "'Space Mono'"
+    }
+  }), /*#__PURE__*/React.createElement(YAxis, {
+    domain: [0, 2.2],
+    tick: {
+      fill: C.dim,
+      fontSize: 9
+    }
+  }), /*#__PURE__*/React.createElement(Tooltip, TOOLTIP), /*#__PURE__*/React.createElement(ReferenceLine, {
+    y: 1.5,
+    stroke: C.red,
+    strokeDasharray: "4 2"
+  }), /*#__PURE__*/React.createElement(ReferenceLine, {
+    y: 0.8,
+    stroke: C.amber,
+    strokeDasharray: "4 2"
+  }), /*#__PURE__*/React.createElement(Area, {
+    dataKey: "acwr",
+    name: "ACWR",
+    fill: C.accent + "18",
+    stroke: C.accent,
+    strokeWidth: 2.5,
+    dot: {
+      r: 4,
+      fill: C.accent
+    }
+  }))), /*#__PURE__*/React.createElement(ST, null, "CARGA POR SESIÓN (RPE × min)"), /*#__PURE__*/React.createElement(ResponsiveContainer, {
+    width: "100%",
+    height: 180
+  }, /*#__PURE__*/React.createElement(BarChart, {
+    data: withACWR,
+    margin: {
+      top: 4,
+      right: 16,
+      bottom: 0,
+      left: -10
+    }
+  }, /*#__PURE__*/React.createElement(CartesianGrid, {
+    strokeDasharray: "3 3",
+    stroke: C.border
+  }), /*#__PURE__*/React.createElement(XAxis, {
+    dataKey: "date",
+    tick: {
+      fill: C.dim,
+      fontSize: 9,
+      fontFamily: "'Space Mono'"
+    }
+  }), /*#__PURE__*/React.createElement(YAxis, {
+    tick: {
+      fill: C.dim,
+      fontSize: 9
+    }
+  }), /*#__PURE__*/React.createElement(Tooltip, TOOLTIP), /*#__PURE__*/React.createElement(Bar, {
+    dataKey: "load",
+    name: "Carga (UA)",
+    radius: [4, 4, 0, 0]
+  }, withACWR.map((s, i) => /*#__PURE__*/React.createElement(Cell, {
+    key: i,
+    fill: acwrColor(s.acwr)
+  }))))), /*#__PURE__*/React.createElement(ST, null, "LOG DE SESIONES"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      overflowX: "auto"
+    }
+  }, /*#__PURE__*/React.createElement("table", null, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, ["Fecha", "Tipo", "Min", "HID", "HID/min", "Dist", "Intens", "Sprints", "ACWR"].map(h => /*#__PURE__*/React.createElement("th", {
+    key: h
+  }, h)))), /*#__PURE__*/React.createElement("tbody", null, withACWR.map((s, i) => {
+    var _s$totalDist, _s$acwr;
+    return /*#__PURE__*/React.createElement("tr", {
+      key: i
+    }, /*#__PURE__*/React.createElement("td", {
+      style: {
+        color: C.accent
+      }
+    }, s.date), /*#__PURE__*/React.createElement("td", {
+      style: {
+        color: C.text,
+        whiteSpace: "nowrap"
+      }
+    }, s.type), /*#__PURE__*/React.createElement("td", {
+      style: {
+        color: C.text
+      }
+    }, s.mins), /*#__PURE__*/React.createElement("td", {
+      style: {
+        color: C.text
+      }
+    }, s.hid), /*#__PURE__*/React.createElement("td", {
+      style: {
+        color: C.orange
+      }
+    }, s.hidMin), /*#__PURE__*/React.createElement("td", {
+      style: {
+        color: C.text
+      }
+    }, (_s$totalDist = s.totalDist) === null || _s$totalDist === void 0 ? void 0 : _s$totalDist.toLocaleString()), /*#__PURE__*/React.createElement("td", {
+      style: {
+        color: C.accent
+      }
+    }, s.intensity), /*#__PURE__*/React.createElement("td", {
+      style: {
+        color: C.text
+      }
+    }, s.sprints), /*#__PURE__*/React.createElement("td", {
+      style: {
+        color: acwrColor(s.acwr),
+        fontWeight: 700
+      }
+    }, (_s$acwr = s.acwr) !== null && _s$acwr !== void 0 ? _s$acwr : "—"));
+  })))));
 }
 
 // ───── MATCH SEED — fallback ────────────────────────────────────────────────
-const MATCH_SEED = [
-  {"Date":"2026-05-21","Opponent":"Palmeiras","Opponent Tier":"2","Minutes Played":"60","Total Distance (m)":"2994","Intensity (m/min)":"50","HID (m)":"660","Work Rate (%)":"","Sprint Distance (m)":"340","HSR (m)":"","Sprints (#)":"8","Accelerations (#)":"","Decelerations (#)":"","Max Speed (m/s)":"","RPE (1-10)":"6","Result":"L 1-0","Position":"CM","Goals":"0","Assists":"0"},
-  {"Date":"2026-05-22","Opponent":"Next Level","Opponent Tier":"2","Minutes Played":"60","Total Distance (m)":"3180","Intensity (m/min)":"53","HID (m)":"730","Work Rate (%)":"","Sprint Distance (m)":"380","HSR (m)":"","Sprints (#)":"9","Accelerations (#)":"","Decelerations (#)":"","Max Speed (m/s)":"","RPE (1-10)":"7","Result":"W","Position":"CM","Goals":"1","Assists":"0"},
-  {"Date":"2026-05-22","Opponent":"Legends FC","Opponent Tier":"2","Minutes Played":"60","Total Distance (m)":"3250","Intensity (m/min)":"54","HID (m)":"750","Work Rate (%)":"","Sprint Distance (m)":"395","HSR (m)":"","Sprints (#)":"10","Accelerations (#)":"","Decelerations (#)":"","Max Speed (m/s)":"","RPE (1-10)":"6.5","Result":"W","Position":"CM","Goals":"0","Assists":"1"},
-  {"Date":"2026-02-21","Opponent":"Total Futbol Academy","Opponent Tier":"Elite","Minutes Played":"70","Total Distance (m)":"4970","Intensity (m/min)":"71","HID (m)":"1106","Work Rate (%)":"","Sprint Distance (m)":"565","HSR (m)":"","Sprints (#)":"","Accelerations (#)":"","Decelerations (#)":"","Max Speed (m/s)":"","RPE (1-10)":"5","Result":"","Position":"CM","Goals":"0","Assists":"0"},
-  {"Date":"2026-03-01","Opponent":"San Diego Strikers","Opponent Tier":"Strong","Minutes Played":"80","Total Distance (m)":"5630","Intensity (m/min)":"70","HID (m)":"1401","Work Rate (%)":"","Sprint Distance (m)":"620","HSR (m)":"","Sprints (#)":"18","Accelerations (#)":"","Decelerations (#)":"","Max Speed (m/s)":"","RPE (1-10)":"7","Result":"W 2-1","Position":"CM","Goals":"0","Assists":"1"},
-  {"Date":"2026-03-15","Opponent":"FC Elite Academy","Opponent Tier":"Elite","Minutes Played":"75","Total Distance (m)":"5340","Intensity (m/min)":"71","HID (m)":"1281","Work Rate (%)":"","Sprint Distance (m)":"590","HSR (m)":"","Sprints (#)":"16","Accelerations (#)":"","Decelerations (#)":"","Max Speed (m/s)":"","RPE (1-10)":"8","Result":"D 1-1","Position":"CM","Goals":"1","Assists":"0"},
-  {"Date":"2026-04-04","Opponent":"Phoenix Rising U14","Opponent Tier":"Strong","Minutes Played":"80","Total Distance (m)":"5870","Intensity (m/min)":"72","HID (m)":"1440","Work Rate (%)":"","Sprint Distance (m)":"650","HSR (m)":"","Sprints (#)":"19","Accelerations (#)":"","Decelerations (#)":"","Max Speed (m/s)":"","RPE (1-10)":"7.5","Result":"W 3-0","Position":"CM","Goals":"1","Assists":"1"},
-  {"Date":"2026-04-11","Opponent":"Strikers FC","Opponent Tier":"Elite","Minutes Played":"80","Total Distance (m)":"5950","Intensity (m/min)":"73","HID (m)":"1520","Work Rate (%)":"","Sprint Distance (m)":"680","HSR (m)":"","Sprints (#)":"21","Accelerations (#)":"","Decelerations (#)":"","Max Speed (m/s)":"","RPE (1-10)":"8.5","Result":"D 2-2","Position":"CM","Goals":"1","Assists":"0"},
-  {"Date":"2026-04-12","Opponent":"RSL Arizona","Opponent Tier":"Strong","Minutes Played":"80","Total Distance (m)":"5720","Intensity (m/min)":"71","HID (m)":"1420","Work Rate (%)":"","Sprint Distance (m)":"640","HSR (m)":"","Sprints (#)":"18","Accelerations (#)":"","Decelerations (#)":"","Max Speed (m/s)":"","RPE (1-10)":"7","Result":"W 2-1","Position":"CM","Goals":"0","Assists":"1"},
-  {"Date":"2026-04-25","Opponent":"Vegas Golden FC","Opponent Tier":"Medium","Minutes Played":"80","Total Distance (m)":"5480","Intensity (m/min)":"68","HID (m)":"1230","Work Rate (%)":"","Sprint Distance (m)":"580","HSR (m)":"","Sprints (#)":"15","Accelerations (#)":"","Decelerations (#)":"","Max Speed (m/s)":"","RPE (1-10)":"6.5","Result":"W 1-0","Position":"CM","Goals":"0","Assists":"0"},
-  {"Date":"2026-05-02","Opponent":"LA Galaxy U14","Opponent Tier":"Elite","Minutes Played":"80","Total Distance (m)":"6050","Intensity (m/min)":"74","HID (m)":"1580","Work Rate (%)":"","Sprint Distance (m)":"700","HSR (m)":"","Sprints (#)":"22","Accelerations (#)":"","Decelerations (#)":"","Max Speed (m/s)":"","RPE (1-10)":"8.5","Result":"W 2-0","Position":"CM","Goals":"1","Assists":"0"},
-  {"Date":"2026-05-05","Opponent":"San Jose Quakes Academy","Opponent Tier":"Strong","Minutes Played":"80","Total Distance (m)":"5810","Intensity (m/min)":"72","HID (m)":"1490","Work Rate (%)":"","Sprint Distance (m)":"670","HSR (m)":"","Sprints (#)":"20","Accelerations (#)":"","Decelerations (#)":"","Max Speed (m/s)":"","RPE (1-10)":"7.5","Result":"D 1-1","Position":"CM","Goals":"0","Assists":"1"},
-  {"Date":"2026-05-08","Opponent":"Oakland SC","Opponent Tier":"Medium","Minutes Played":"80","Total Distance (m)":"5300","Intensity (m/min)":"66","HID (m)":"1100","Work Rate (%)":"","Sprint Distance (m)":"520","HSR (m)":"","Sprints (#)":"13","Accelerations (#)":"","Decelerations (#)":"","Max Speed (m/s)":"","RPE (1-10)":"6","Result":"W 3-1","Position":"CM","Goals":"2","Assists":"0"},
-  {"Date":"2026-05-09","Opponent":"LA Bulls","Opponent Tier":"Strong","Minutes Played":"45","Total Distance (m)":"2980","Intensity (m/min)":"66","HID (m)":"620","Work Rate (%)":"75","Sprint Distance (m)":"340","HSR (m)":"85","Sprints (#)":"8","Accelerations (#)":"32","Decelerations (#)":"28","Max Speed (m/s)":"7.45","RPE (1-10)":"7.5","Result":"L 0-1","Position":"CM","Goals":"0","Assists":"0"},
-  {"Date":"2026-05-23","Opponent":"Seattle","Opponent Tier":"2","Minutes Played":"60","Total Distance (m)":"6955","Intensity (m/min)":"116","HID (m)":"1276","Work Rate (%)":"71","Sprint Distance (m)":"623","HSR (m)":"234","Sprints (#)":"32","Accelerations (#)":"48","Decelerations (#)":"53","Max Speed (m/s)":"7.21","RPE (1-10)":"6.5","Result":"L 3-2","Position":"CM","Goals":"0","Assists":"0"},
-  {"Date":"2026-05-28","Opponent":"Midwest United","Opponent Tier":"","Minutes Played":"45","Total Distance (m)":"4803","Intensity (m/min)":"62","HID (m)":"636","Work Rate (%)":"48","Sprint Distance (m)":"305","HSR (m)":"80","Sprints (#)":"18","Accelerations (#)":"31","Decelerations (#)":"33","Max Speed (m/s)":"7.57","RPE (1-10)":"8","Result":"W 1-1 PK","Position":"CM","Goals":"0","Assists":"0"},
-  {"Date":"2026-05-28","Opponent":"Ironbound","Opponent Tier":"","Minutes Played":"45","Total Distance (m)":"4706","Intensity (m/min)":"77","HID (m)":"671","Work Rate (%)":"49","Sprint Distance (m)":"195","HSR (m)":"87","Sprints (#)":"12","Accelerations (#)":"37","Decelerations (#)":"44","Max Speed (m/s)":"6.92","RPE (1-10)":"8","Result":"L 1-3","Position":"CM","Goals":"0","Assists":"1"},
-  {"Date":"2026-05-29","Opponent":"Blau","Opponent Tier":"","Minutes Played":"45","Total Distance (m)":"6339","Intensity (m/min)":"87","HID (m)":"1036","Work Rate (%)":"64","Sprint Distance (m)":"494","HSR (m)":"130","Sprints (#)":"24","Accelerations (#)":"38","Decelerations (#)":"45","Max Speed (m/s)":"7.70","RPE (1-10)":"7","Result":"L 1-2","Position":"CM","Goals":"0","Assists":"0"},
-  {"Date":"2026-05-30","Opponent":"SFFA","Opponent Tier":"","Minutes Played":"45","Total Distance (m)":"6849","Intensity (m/min)":"86","HID (m)":"1071","Work Rate (%)":"64","Sprint Distance (m)":"477","HSR (m)":"175","Sprints (#)":"30","Accelerations (#)":"41","Decelerations (#)":"42","Max Speed (m/s)":"7.53","RPE (1-10)":"8","Result":"W 3-2","Position":"CM","Goals":"1","Assists":"0"}
-];
+const MATCH_SEED = [{
+  "Date": "2026-05-21",
+  "Opponent": "Palmeiras",
+  "Opponent Tier": "2",
+  "Minutes Played": "60",
+  "Total Distance (m)": "2994",
+  "Intensity (m/min)": "50",
+  "HID (m)": "660",
+  "Work Rate (%)": "",
+  "Sprint Distance (m)": "340",
+  "HSR (m)": "",
+  "Sprints (#)": "8",
+  "Accelerations (#)": "",
+  "Decelerations (#)": "",
+  "Max Speed (m/s)": "",
+  "RPE (1-10)": "6",
+  "Result": "L 1-0",
+  "Position": "CM",
+  "Goals": "0",
+  "Assists": "0"
+}, {
+  "Date": "2026-05-22",
+  "Opponent": "Next Level",
+  "Opponent Tier": "2",
+  "Minutes Played": "60",
+  "Total Distance (m)": "3180",
+  "Intensity (m/min)": "53",
+  "HID (m)": "730",
+  "Work Rate (%)": "",
+  "Sprint Distance (m)": "380",
+  "HSR (m)": "",
+  "Sprints (#)": "9",
+  "Accelerations (#)": "",
+  "Decelerations (#)": "",
+  "Max Speed (m/s)": "",
+  "RPE (1-10)": "7",
+  "Result": "W",
+  "Position": "CM",
+  "Goals": "1",
+  "Assists": "0"
+}, {
+  "Date": "2026-05-22",
+  "Opponent": "Legends FC",
+  "Opponent Tier": "2",
+  "Minutes Played": "60",
+  "Total Distance (m)": "3250",
+  "Intensity (m/min)": "54",
+  "HID (m)": "750",
+  "Work Rate (%)": "",
+  "Sprint Distance (m)": "395",
+  "HSR (m)": "",
+  "Sprints (#)": "10",
+  "Accelerations (#)": "",
+  "Decelerations (#)": "",
+  "Max Speed (m/s)": "",
+  "RPE (1-10)": "6.5",
+  "Result": "W",
+  "Position": "CM",
+  "Goals": "0",
+  "Assists": "1"
+}, {
+  "Date": "2026-02-21",
+  "Opponent": "Total Futbol Academy",
+  "Opponent Tier": "Elite",
+  "Minutes Played": "70",
+  "Total Distance (m)": "4970",
+  "Intensity (m/min)": "71",
+  "HID (m)": "1106",
+  "Work Rate (%)": "",
+  "Sprint Distance (m)": "565",
+  "HSR (m)": "",
+  "Sprints (#)": "",
+  "Accelerations (#)": "",
+  "Decelerations (#)": "",
+  "Max Speed (m/s)": "",
+  "RPE (1-10)": "5",
+  "Result": "",
+  "Position": "CM",
+  "Goals": "0",
+  "Assists": "0"
+}, {
+  "Date": "2026-03-01",
+  "Opponent": "San Diego Strikers",
+  "Opponent Tier": "Strong",
+  "Minutes Played": "80",
+  "Total Distance (m)": "5630",
+  "Intensity (m/min)": "70",
+  "HID (m)": "1401",
+  "Work Rate (%)": "",
+  "Sprint Distance (m)": "620",
+  "HSR (m)": "",
+  "Sprints (#)": "18",
+  "Accelerations (#)": "",
+  "Decelerations (#)": "",
+  "Max Speed (m/s)": "",
+  "RPE (1-10)": "7",
+  "Result": "W 2-1",
+  "Position": "CM",
+  "Goals": "0",
+  "Assists": "1"
+}, {
+  "Date": "2026-03-15",
+  "Opponent": "FC Elite Academy",
+  "Opponent Tier": "Elite",
+  "Minutes Played": "75",
+  "Total Distance (m)": "5340",
+  "Intensity (m/min)": "71",
+  "HID (m)": "1281",
+  "Work Rate (%)": "",
+  "Sprint Distance (m)": "590",
+  "HSR (m)": "",
+  "Sprints (#)": "16",
+  "Accelerations (#)": "",
+  "Decelerations (#)": "",
+  "Max Speed (m/s)": "",
+  "RPE (1-10)": "8",
+  "Result": "D 1-1",
+  "Position": "CM",
+  "Goals": "1",
+  "Assists": "0"
+}, {
+  "Date": "2026-04-04",
+  "Opponent": "Phoenix Rising U14",
+  "Opponent Tier": "Strong",
+  "Minutes Played": "80",
+  "Total Distance (m)": "5870",
+  "Intensity (m/min)": "72",
+  "HID (m)": "1440",
+  "Work Rate (%)": "",
+  "Sprint Distance (m)": "650",
+  "HSR (m)": "",
+  "Sprints (#)": "19",
+  "Accelerations (#)": "",
+  "Decelerations (#)": "",
+  "Max Speed (m/s)": "",
+  "RPE (1-10)": "7.5",
+  "Result": "W 3-0",
+  "Position": "CM",
+  "Goals": "1",
+  "Assists": "1"
+}, {
+  "Date": "2026-04-11",
+  "Opponent": "Strikers FC",
+  "Opponent Tier": "Elite",
+  "Minutes Played": "80",
+  "Total Distance (m)": "5950",
+  "Intensity (m/min)": "73",
+  "HID (m)": "1520",
+  "Work Rate (%)": "",
+  "Sprint Distance (m)": "680",
+  "HSR (m)": "",
+  "Sprints (#)": "21",
+  "Accelerations (#)": "",
+  "Decelerations (#)": "",
+  "Max Speed (m/s)": "",
+  "RPE (1-10)": "8.5",
+  "Result": "D 2-2",
+  "Position": "CM",
+  "Goals": "1",
+  "Assists": "0"
+}, {
+  "Date": "2026-04-12",
+  "Opponent": "RSL Arizona",
+  "Opponent Tier": "Strong",
+  "Minutes Played": "80",
+  "Total Distance (m)": "5720",
+  "Intensity (m/min)": "71",
+  "HID (m)": "1420",
+  "Work Rate (%)": "",
+  "Sprint Distance (m)": "640",
+  "HSR (m)": "",
+  "Sprints (#)": "18",
+  "Accelerations (#)": "",
+  "Decelerations (#)": "",
+  "Max Speed (m/s)": "",
+  "RPE (1-10)": "7",
+  "Result": "W 2-1",
+  "Position": "CM",
+  "Goals": "0",
+  "Assists": "1"
+}, {
+  "Date": "2026-04-25",
+  "Opponent": "Vegas Golden FC",
+  "Opponent Tier": "Medium",
+  "Minutes Played": "80",
+  "Total Distance (m)": "5480",
+  "Intensity (m/min)": "68",
+  "HID (m)": "1230",
+  "Work Rate (%)": "",
+  "Sprint Distance (m)": "580",
+  "HSR (m)": "",
+  "Sprints (#)": "15",
+  "Accelerations (#)": "",
+  "Decelerations (#)": "",
+  "Max Speed (m/s)": "",
+  "RPE (1-10)": "6.5",
+  "Result": "W 1-0",
+  "Position": "CM",
+  "Goals": "0",
+  "Assists": "0"
+}, {
+  "Date": "2026-05-02",
+  "Opponent": "LA Galaxy U14",
+  "Opponent Tier": "Elite",
+  "Minutes Played": "80",
+  "Total Distance (m)": "6050",
+  "Intensity (m/min)": "74",
+  "HID (m)": "1580",
+  "Work Rate (%)": "",
+  "Sprint Distance (m)": "700",
+  "HSR (m)": "",
+  "Sprints (#)": "22",
+  "Accelerations (#)": "",
+  "Decelerations (#)": "",
+  "Max Speed (m/s)": "",
+  "RPE (1-10)": "8.5",
+  "Result": "W 2-0",
+  "Position": "CM",
+  "Goals": "1",
+  "Assists": "0"
+}, {
+  "Date": "2026-05-05",
+  "Opponent": "San Jose Quakes Academy",
+  "Opponent Tier": "Strong",
+  "Minutes Played": "80",
+  "Total Distance (m)": "5810",
+  "Intensity (m/min)": "72",
+  "HID (m)": "1490",
+  "Work Rate (%)": "",
+  "Sprint Distance (m)": "670",
+  "HSR (m)": "",
+  "Sprints (#)": "20",
+  "Accelerations (#)": "",
+  "Decelerations (#)": "",
+  "Max Speed (m/s)": "",
+  "RPE (1-10)": "7.5",
+  "Result": "D 1-1",
+  "Position": "CM",
+  "Goals": "0",
+  "Assists": "1"
+}, {
+  "Date": "2026-05-08",
+  "Opponent": "Oakland SC",
+  "Opponent Tier": "Medium",
+  "Minutes Played": "80",
+  "Total Distance (m)": "5300",
+  "Intensity (m/min)": "66",
+  "HID (m)": "1100",
+  "Work Rate (%)": "",
+  "Sprint Distance (m)": "520",
+  "HSR (m)": "",
+  "Sprints (#)": "13",
+  "Accelerations (#)": "",
+  "Decelerations (#)": "",
+  "Max Speed (m/s)": "",
+  "RPE (1-10)": "6",
+  "Result": "W 3-1",
+  "Position": "CM",
+  "Goals": "2",
+  "Assists": "0"
+}, {
+  "Date": "2026-05-09",
+  "Opponent": "LA Bulls",
+  "Opponent Tier": "Strong",
+  "Minutes Played": "45",
+  "Total Distance (m)": "2980",
+  "Intensity (m/min)": "66",
+  "HID (m)": "620",
+  "Work Rate (%)": "75",
+  "Sprint Distance (m)": "340",
+  "HSR (m)": "85",
+  "Sprints (#)": "8",
+  "Accelerations (#)": "32",
+  "Decelerations (#)": "28",
+  "Max Speed (m/s)": "7.45",
+  "RPE (1-10)": "7.5",
+  "Result": "L 0-1",
+  "Position": "CM",
+  "Goals": "0",
+  "Assists": "0"
+}, {
+  "Date": "2026-05-23",
+  "Opponent": "Seattle",
+  "Opponent Tier": "2",
+  "Minutes Played": "60",
+  "Total Distance (m)": "6955",
+  "Intensity (m/min)": "116",
+  "HID (m)": "1276",
+  "Work Rate (%)": "71",
+  "Sprint Distance (m)": "623",
+  "HSR (m)": "234",
+  "Sprints (#)": "32",
+  "Accelerations (#)": "48",
+  "Decelerations (#)": "53",
+  "Max Speed (m/s)": "7.21",
+  "RPE (1-10)": "6.5",
+  "Result": "L 3-2",
+  "Position": "CM",
+  "Goals": "0",
+  "Assists": "0"
+}, {
+  "Date": "2026-05-28",
+  "Opponent": "Midwest United",
+  "Opponent Tier": "",
+  "Minutes Played": "45",
+  "Total Distance (m)": "4803",
+  "Intensity (m/min)": "62",
+  "HID (m)": "636",
+  "Work Rate (%)": "48",
+  "Sprint Distance (m)": "305",
+  "HSR (m)": "80",
+  "Sprints (#)": "18",
+  "Accelerations (#)": "31",
+  "Decelerations (#)": "33",
+  "Max Speed (m/s)": "7.57",
+  "RPE (1-10)": "8",
+  "Result": "W 1-1 PK",
+  "Position": "CM",
+  "Goals": "0",
+  "Assists": "0"
+}, {
+  "Date": "2026-05-28",
+  "Opponent": "Ironbound",
+  "Opponent Tier": "",
+  "Minutes Played": "45",
+  "Total Distance (m)": "4706",
+  "Intensity (m/min)": "77",
+  "HID (m)": "671",
+  "Work Rate (%)": "49",
+  "Sprint Distance (m)": "195",
+  "HSR (m)": "87",
+  "Sprints (#)": "12",
+  "Accelerations (#)": "37",
+  "Decelerations (#)": "44",
+  "Max Speed (m/s)": "6.92",
+  "RPE (1-10)": "8",
+  "Result": "L 1-3",
+  "Position": "CM",
+  "Goals": "0",
+  "Assists": "1"
+}, {
+  "Date": "2026-05-29",
+  "Opponent": "Blau",
+  "Opponent Tier": "",
+  "Minutes Played": "45",
+  "Total Distance (m)": "6339",
+  "Intensity (m/min)": "87",
+  "HID (m)": "1036",
+  "Work Rate (%)": "64",
+  "Sprint Distance (m)": "494",
+  "HSR (m)": "130",
+  "Sprints (#)": "24",
+  "Accelerations (#)": "38",
+  "Decelerations (#)": "45",
+  "Max Speed (m/s)": "7.70",
+  "RPE (1-10)": "7",
+  "Result": "L 1-2",
+  "Position": "CM",
+  "Goals": "0",
+  "Assists": "0"
+}, {
+  "Date": "2026-05-30",
+  "Opponent": "SFFA",
+  "Opponent Tier": "",
+  "Minutes Played": "45",
+  "Total Distance (m)": "6849",
+  "Intensity (m/min)": "86",
+  "HID (m)": "1071",
+  "Work Rate (%)": "64",
+  "Sprint Distance (m)": "477",
+  "HSR (m)": "175",
+  "Sprints (#)": "30",
+  "Accelerations (#)": "41",
+  "Decelerations (#)": "42",
+  "Max Speed (m/s)": "7.53",
+  "RPE (1-10)": "8",
+  "Result": "W 3-2",
+  "Position": "CM",
+  "Goals": "1",
+  "Assists": "0"
+}];
 
 // ───── MLS NEXT CUP PLAYOFFS DATA (Salt Lake City, 1300m altitude) ────────
-const MLS_CUP_DATA = [
-  { game: 1, date: "May 28", opponent: "Midwest United", result: "W 1-1 PK", goals: 0, assists: 0, mins: 45, totalDist: 4803, hid: 636, hidMin: 14.13, sprintDist: 305, hsr: 80, sprints: 18, accel: 31, decel: 33, maxSpeed: 7.57, avgMaxSpeed: 4.68, workRate: 48, rpe: 8, avgHR: 160, maxHR: 195, z4: 21, z5: 20, calories: 423 },
-  { game: 2, date: "May 28", opponent: "Ironbound", result: "L 1-3", goals: 0, assists: 1, mins: 45, totalDist: 4706, hid: 671, hidMin: 14.91, sprintDist: 195, hsr: 87, sprints: 12, accel: 37, decel: 44, maxSpeed: 6.92, avgMaxSpeed: 4.75, workRate: 49, rpe: 8, avgHR: 155, maxHR: 193, z4: 18, z5: 18, calories: 419 },
-  { game: 3, date: "May 29", opponent: "Blau", result: "L 1-2", goals: 0, assists: 0, mins: 45, totalDist: 6339, hid: 1036, hidMin: 23.02, sprintDist: 494, hsr: 130, sprints: 24, accel: 38, decel: 45, maxSpeed: 7.70, avgMaxSpeed: 5.45, workRate: 64, rpe: 7, avgHR: 142, maxHR: 188, z4: 22, z5: 15, calories: 562 },
-  { game: 4, date: "May 30", opponent: "SFFA", result: "W 3-2", goals: 1, assists: 0, mins: 45, totalDist: 6849, hid: 1071, hidMin: 23.80, sprintDist: 477, hsr: 175, sprints: 30, accel: 41, decel: 42, maxSpeed: 7.53, avgMaxSpeed: 5.99, workRate: 64, rpe: 8, avgHR: 146, maxHR: 184, z4: 24, z5: 9, calories: 607 },
-];
+const MLS_CUP_DATA = [{
+  game: 1,
+  date: "May 28",
+  opponent: "Midwest United",
+  result: "W 1-1 PK",
+  goals: 0,
+  assists: 0,
+  mins: 45,
+  totalDist: 4803,
+  hid: 636,
+  hidMin: 14.13,
+  sprintDist: 305,
+  hsr: 80,
+  sprints: 18,
+  accel: 31,
+  decel: 33,
+  maxSpeed: 7.57,
+  avgMaxSpeed: 4.68,
+  workRate: 48,
+  rpe: 8,
+  avgHR: 160,
+  maxHR: 195,
+  z4: 21,
+  z5: 20,
+  calories: 423
+}, {
+  game: 2,
+  date: "May 28",
+  opponent: "Ironbound",
+  result: "L 1-3",
+  goals: 0,
+  assists: 1,
+  mins: 45,
+  totalDist: 4706,
+  hid: 671,
+  hidMin: 14.91,
+  sprintDist: 195,
+  hsr: 87,
+  sprints: 12,
+  accel: 37,
+  decel: 44,
+  maxSpeed: 6.92,
+  avgMaxSpeed: 4.75,
+  workRate: 49,
+  rpe: 8,
+  avgHR: 155,
+  maxHR: 193,
+  z4: 18,
+  z5: 18,
+  calories: 419
+}, {
+  game: 3,
+  date: "May 29",
+  opponent: "Blau",
+  result: "L 1-2",
+  goals: 0,
+  assists: 0,
+  mins: 45,
+  totalDist: 6339,
+  hid: 1036,
+  hidMin: 23.02,
+  sprintDist: 494,
+  hsr: 130,
+  sprints: 24,
+  accel: 38,
+  decel: 45,
+  maxSpeed: 7.70,
+  avgMaxSpeed: 5.45,
+  workRate: 64,
+  rpe: 7,
+  avgHR: 142,
+  maxHR: 188,
+  z4: 22,
+  z5: 15,
+  calories: 562
+}, {
+  game: 4,
+  date: "May 30",
+  opponent: "SFFA",
+  result: "W 3-2",
+  goals: 1,
+  assists: 0,
+  mins: 45,
+  totalDist: 6849,
+  hid: 1071,
+  hidMin: 23.80,
+  sprintDist: 477,
+  hsr: 175,
+  sprints: 30,
+  accel: 41,
+  decel: 42,
+  maxSpeed: 7.53,
+  avgMaxSpeed: 5.99,
+  workRate: 64,
+  rpe: 8,
+  avgHR: 146,
+  maxHR: 184,
+  z4: 24,
+  z5: 9,
+  calories: 607
+}];
 
 // ───── ¿VOY MEJORANDO? — Performance vs Baseline (Mateo vs Mateo) ──────────
-function ProgressSection({ matches }) {
+function ProgressSection({
+  matches
+}) {
   const withAM = useMemo(() => {
     return matches.map((m, i) => {
       const prev = matches.slice(Math.max(0, i - 5), i).filter(p => p.hidMin > 0);
       const prevAvg = prev.length >= 2 ? prev.reduce((s, p) => s + p.hidMin, 0) / prev.length : null;
       const am = prevAvg && m.hidMin > 0 ? +(m.hidMin / prevAvg).toFixed(2) : null;
-      return { ...m, baseHIDMin: prevAvg ? +prevAvg.toFixed(2) : null, am };
+      return {
+        ...m,
+        baseHIDMin: prevAvg ? +prevAvg.toFixed(2) : null,
+        am
+      };
     });
   }, [matches]);
-
   const last8 = withAM.filter(m => m.am != null).slice(-8);
   if (last8.length < 3) return null;
-
   const avgAM = +(last8.reduce((s, m) => s + m.am, 0) / last8.length).toFixed(2);
   const avgPct = Math.round(avgAM * 100);
-
-  const amLabel = (am) => {
-    if (am >= 1.20) return { text: "Excelente", color: C.accent };
-    if (am >= 1.05) return { text: "Arriba de nivel", color: C.green };
-    if (am >= 0.95) return { text: "Normal", color: C.text };
-    if (am >= 0.80) return { text: "Debajo de nivel", color: C.amber };
-    return { text: "Partido flojo", color: C.red };
+  const amLabel = am => {
+    if (am >= 1.20) return {
+      text: "Excelente",
+      color: C.accent
+    };
+    if (am >= 1.05) return {
+      text: "Arriba de nivel",
+      color: C.green
+    };
+    if (am >= 0.95) return {
+      text: "Normal",
+      color: C.text
+    };
+    if (am >= 0.80) return {
+      text: "Debajo de nivel",
+      color: C.amber
+    };
+    return {
+      text: "Partido flojo",
+      color: C.red
+    };
   };
-
   const chartData = last8.map(m => ({
-    name: m.date, opponent: m.opponent, result: m.result,
-    am: Math.round(m.am * 100), hidMin: m.hidMin, baseHIDMin: m.baseHIDMin,
+    name: m.date,
+    opponent: m.opponent,
+    result: m.result,
+    am: Math.round(m.am * 100),
+    hidMin: m.hidMin,
+    baseHIDMin: m.baseHIDMin
   }));
-
   const avgColor = avgAM >= 1.05 ? C.green : avgAM >= 0.95 ? C.text : C.amber;
-  const avgMsg = avgAM >= 1.05
-    ? `Mateo está jugando ${avgPct - 100}% arriba de su base reciente.`
-    : avgAM >= 0.95
-    ? `Mateo está jugando a su nivel estándar.`
-    : `Mateo está jugando ${100 - avgPct}% debajo de su base reciente.`;
-
-  const ProgressTooltip = ({ active, payload, label }) => {
-    if (!active || !payload?.length) return null;
-    const d = payload[0]?.payload;
-    const lbl = amLabel((d?.am || 100) / 100);
-    return (
-      <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 16px" }}>
-        <p style={{ color: C.accent, fontWeight: 700, fontSize: 13, margin: "0 0 4px" }}>{label} — {d?.opponent}</p>
-        <p style={{ color: lbl.color, fontSize: 12, fontFamily: "'Space Mono', monospace", fontWeight: 700, margin: "0 0 4px" }}>{d?.am}% — {lbl.text}</p>
-        <p style={{ color: C.dim, fontSize: 10, fontFamily: "'Space Mono', monospace", margin: "0 0 2px" }}>HID/min actual: {d?.hidMin}</p>
-        <p style={{ color: C.dim, fontSize: 10, fontFamily: "'Space Mono', monospace", margin: 0 }}>Base HID/min: {d?.baseHIDMin}</p>
-      </div>
-    );
+  const avgMsg = avgAM >= 1.05 ? `Mateo está jugando ${avgPct - 100}% arriba de su base reciente.` : avgAM >= 0.95 ? `Mateo está jugando a su nivel estándar.` : `Mateo está jugando ${100 - avgPct}% debajo de su base reciente.`;
+  const ProgressTooltip = ({
+    active,
+    payload,
+    label
+  }) => {
+    var _payload$2;
+    if (!active || !(payload !== null && payload !== void 0 && payload.length)) return null;
+    const d = (_payload$2 = payload[0]) === null || _payload$2 === void 0 ? void 0 : _payload$2.payload;
+    const lbl = amLabel(((d === null || d === void 0 ? void 0 : d.am) || 100) / 100);
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: C.panel,
+        border: `1px solid ${C.border}`,
+        borderRadius: 10,
+        padding: "12px 16px"
+      }
+    }, /*#__PURE__*/React.createElement("p", {
+      style: {
+        color: C.accent,
+        fontWeight: 700,
+        fontSize: 13,
+        margin: "0 0 4px"
+      }
+    }, label, " — ", d === null || d === void 0 ? void 0 : d.opponent), /*#__PURE__*/React.createElement("p", {
+      style: {
+        color: lbl.color,
+        fontSize: 12,
+        fontFamily: "'Space Mono', monospace",
+        fontWeight: 700,
+        margin: "0 0 4px"
+      }
+    }, d === null || d === void 0 ? void 0 : d.am, "% — ", lbl.text), /*#__PURE__*/React.createElement("p", {
+      style: {
+        color: C.dim,
+        fontSize: 10,
+        fontFamily: "'Space Mono', monospace",
+        margin: "0 0 2px"
+      }
+    }, "HID/min actual: ", d === null || d === void 0 ? void 0 : d.hidMin), /*#__PURE__*/React.createElement("p", {
+      style: {
+        color: C.dim,
+        fontSize: 10,
+        fontFamily: "'Space Mono', monospace",
+        margin: 0
+      }
+    }, "Base HID/min: ", d === null || d === void 0 ? void 0 : d.baseHIDMin));
   };
-
-  return (
-    <div>
-      <ST>¿VOY MEJORANDO? — tu rendimiento vs tu propio estándar</ST>
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
-        <div style={{ background: C.panel, border: `2px solid ${avgColor}`, borderRadius: 14, padding: "18px 22px", flex: "1 1 180px", minWidth: 180 }}>
-          <p style={{ color: C.dim, fontSize: 8, fontFamily: "'Space Mono', monospace", letterSpacing: 3, textTransform: "uppercase", margin: "0 0 6px" }}>FORMA RECIENTE</p>
-          <p style={{ color: avgColor, fontSize: 42, fontWeight: 900, fontFamily: "'Syne', sans-serif", lineHeight: 1, margin: "0 0 6px" }}>{avgPct}%</p>
-          <p style={{ color: C.text, fontSize: 11, lineHeight: 1.5, margin: 0 }}>{avgMsg}</p>
-        </div>
-        <div style={{ background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 14, padding: "18px 22px", flex: "2 1 280px", minWidth: 260 }}>
-          <p style={{ color: C.accent, fontSize: 10, fontFamily: "'Space Mono', monospace", letterSpacing: 2, textTransform: "uppercase", margin: "0 0 8px" }}>¿QUÉ MIDE ESTO?</p>
-          <p style={{ color: C.text, fontSize: 12, lineHeight: 1.6, margin: 0 }}>
-            No mide si ganamos o perdimos. Mide si corriste y participaste <strong style={{ color: C.accent }}>por encima o por debajo de tu propio nivel reciente</strong>.
-            <br />100% = tu nivel normal. Arriba = estás creciendo. Abajo = tu cuerpo necesita recuperarse.
-          </p>
-        </div>
-      </div>
-      <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, padding: "16px 12px 8px", marginBottom: 16 }}>
-        <ResponsiveContainer width="100%" height={240}>
-          <ComposedChart data={chartData} margin={{ top: 10, right: 20, bottom: 5, left: 0 }}>
-            <CartesianGrid stroke={C.muted} strokeDasharray="3 3" />
-            <XAxis dataKey="name" tick={{ fill: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace" }} />
-            <YAxis domain={[60, 160]} tick={{ fill: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace" }} label={{ value: "% de tu base", angle: -90, position: "insideLeft", fill: C.dim, fontSize: 9 }} />
-            <ReferenceLine y={105} stroke={C.green} strokeDasharray="4 4" strokeOpacity={0.5} />
-            <ReferenceLine y={100} stroke={C.text} strokeWidth={2} strokeDasharray="8 4" />
-            <ReferenceLine y={95} stroke={C.amber} strokeDasharray="4 4" strokeOpacity={0.5} />
-            <Tooltip content={<ProgressTooltip />} />
-            <Line type="monotone" dataKey="am" name="Forma %" stroke={C.accent} strokeWidth={3} dot={{ r: 6, fill: C.accent, stroke: C.bg, strokeWidth: 2 }} />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(155px, 1fr))", gap: 10, marginBottom: 20 }}>
-        {last8.map((m, i) => {
-          const lbl = amLabel(m.am);
-          const isW = m.result?.startsWith("W");
-          return (
-            <div key={i} style={{ background: C.panel, border: `1px solid ${lbl.color}33`, borderRadius: 10, padding: "12px 14px" }}>
-              <p style={{ color: C.dim, fontSize: 8, fontFamily: "'Space Mono', monospace", letterSpacing: 2, textTransform: "uppercase", margin: "0 0 3px" }}>{m.date}</p>
-              <p style={{ color: C.text, fontSize: 11, fontWeight: 700, margin: "0 0 6px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {m.opponent} <span style={{ color: isW ? C.green : C.red, fontSize: 9 }}>{m.result}</span>
-              </p>
-              <p style={{ color: lbl.color, fontSize: 24, fontWeight: 900, fontFamily: "'Syne', sans-serif", lineHeight: 1, margin: "0 0 2px" }}>{Math.round(m.am * 100)}%</p>
-              <p style={{ color: lbl.color, fontSize: 9, fontFamily: "'Space Mono', monospace", letterSpacing: 1, margin: "0 0 5px" }}>{lbl.text}</p>
-              <p style={{ color: C.dim, fontSize: 8, fontFamily: "'Space Mono', monospace", margin: 0 }}>HID/min {m.hidMin} | Base {m.baseHIDMin}</p>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(ST, null, "¿VOY MEJORANDO? — tu rendimiento vs tu propio estándar"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 12,
+      flexWrap: "wrap",
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.panel,
+      border: `2px solid ${avgColor}`,
+      borderRadius: 14,
+      padding: "18px 22px",
+      flex: "1 1 180px",
+      minWidth: 180
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.dim,
+      fontSize: 8,
+      fontFamily: "'Space Mono', monospace",
+      letterSpacing: 3,
+      textTransform: "uppercase",
+      margin: "0 0 6px"
+    }
+  }, "FORMA RECIENTE"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: avgColor,
+      fontSize: 42,
+      fontWeight: 900,
+      fontFamily: "'Syne', sans-serif",
+      lineHeight: 1,
+      margin: "0 0 6px"
+    }
+  }, avgPct, "%"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.text,
+      fontSize: 11,
+      lineHeight: 1.5,
+      margin: 0
+    }
+  }, avgMsg)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.panel2,
+      border: `1px solid ${C.border}`,
+      borderRadius: 14,
+      padding: "18px 22px",
+      flex: "2 1 280px",
+      minWidth: 260
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.accent,
+      fontSize: 10,
+      fontFamily: "'Space Mono', monospace",
+      letterSpacing: 2,
+      textTransform: "uppercase",
+      margin: "0 0 8px"
+    }
+  }, "¿QUÉ MIDE ESTO?"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.text,
+      fontSize: 12,
+      lineHeight: 1.6,
+      margin: 0
+    }
+  }, "No mide si ganamos o perdimos. Mide si corriste y participaste ", /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: C.accent
+    }
+  }, "por encima o por debajo de tu propio nivel reciente"), ".", /*#__PURE__*/React.createElement("br", null), "100% = tu nivel normal. Arriba = estás creciendo. Abajo = tu cuerpo necesita recuperarse."))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.panel,
+      border: `1px solid ${C.border}`,
+      borderRadius: 12,
+      padding: "16px 12px 8px",
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement(ResponsiveContainer, {
+    width: "100%",
+    height: 240
+  }, /*#__PURE__*/React.createElement(ComposedChart, {
+    data: chartData,
+    margin: {
+      top: 10,
+      right: 20,
+      bottom: 5,
+      left: 0
+    }
+  }, /*#__PURE__*/React.createElement(CartesianGrid, {
+    stroke: C.muted,
+    strokeDasharray: "3 3"
+  }), /*#__PURE__*/React.createElement(XAxis, {
+    dataKey: "name",
+    tick: {
+      fill: C.dim,
+      fontSize: 9,
+      fontFamily: "'Space Mono', monospace"
+    }
+  }), /*#__PURE__*/React.createElement(YAxis, {
+    domain: [60, 160],
+    tick: {
+      fill: C.dim,
+      fontSize: 9,
+      fontFamily: "'Space Mono', monospace"
+    },
+    label: {
+      value: "% de tu base",
+      angle: -90,
+      position: "insideLeft",
+      fill: C.dim,
+      fontSize: 9
+    }
+  }), /*#__PURE__*/React.createElement(ReferenceLine, {
+    y: 105,
+    stroke: C.green,
+    strokeDasharray: "4 4",
+    strokeOpacity: 0.5
+  }), /*#__PURE__*/React.createElement(ReferenceLine, {
+    y: 100,
+    stroke: C.text,
+    strokeWidth: 2,
+    strokeDasharray: "8 4"
+  }), /*#__PURE__*/React.createElement(ReferenceLine, {
+    y: 95,
+    stroke: C.amber,
+    strokeDasharray: "4 4",
+    strokeOpacity: 0.5
+  }), /*#__PURE__*/React.createElement(Tooltip, {
+    content: /*#__PURE__*/React.createElement(ProgressTooltip, null)
+  }), /*#__PURE__*/React.createElement(Line, {
+    type: "monotone",
+    dataKey: "am",
+    name: "Forma %",
+    stroke: C.accent,
+    strokeWidth: 3,
+    dot: {
+      r: 6,
+      fill: C.accent,
+      stroke: C.bg,
+      strokeWidth: 2
+    }
+  })))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fill, minmax(155px, 1fr))",
+      gap: 10,
+      marginBottom: 20
+    }
+  }, last8.map((m, i) => {
+    var _m$result3;
+    const lbl = amLabel(m.am);
+    const isW = (_m$result3 = m.result) === null || _m$result3 === void 0 ? void 0 : _m$result3.startsWith("W");
+    return /*#__PURE__*/React.createElement("div", {
+      key: i,
+      style: {
+        background: C.panel,
+        border: `1px solid ${lbl.color}33`,
+        borderRadius: 10,
+        padding: "12px 14px"
+      }
+    }, /*#__PURE__*/React.createElement("p", {
+      style: {
+        color: C.dim,
+        fontSize: 8,
+        fontFamily: "'Space Mono', monospace",
+        letterSpacing: 2,
+        textTransform: "uppercase",
+        margin: "0 0 3px"
+      }
+    }, m.date), /*#__PURE__*/React.createElement("p", {
+      style: {
+        color: C.text,
+        fontSize: 11,
+        fontWeight: 700,
+        margin: "0 0 6px",
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis"
+      }
+    }, m.opponent, " ", /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: isW ? C.green : C.red,
+        fontSize: 9
+      }
+    }, m.result)), /*#__PURE__*/React.createElement("p", {
+      style: {
+        color: lbl.color,
+        fontSize: 24,
+        fontWeight: 900,
+        fontFamily: "'Syne', sans-serif",
+        lineHeight: 1,
+        margin: "0 0 2px"
+      }
+    }, Math.round(m.am * 100), "%"), /*#__PURE__*/React.createElement("p", {
+      style: {
+        color: lbl.color,
+        fontSize: 9,
+        fontFamily: "'Space Mono', monospace",
+        letterSpacing: 1,
+        margin: "0 0 5px"
+      }
+    }, lbl.text), /*#__PURE__*/React.createElement("p", {
+      style: {
+        color: C.dim,
+        fontSize: 8,
+        fontFamily: "'Space Mono', monospace",
+        margin: 0
+      }
+    }, "HID/min ", m.hidMin, " | Base ", m.baseHIDMin));
+  })));
 }
 
 // ───── PLAYOFFS TAB — MLS NEXT CUP Tournament Tracker ─────────────────────
 const METRIC_INFO = {
-  hid: { label: "HID", unit: "m", color: C.accent, emoji: "🔥",
-    tip: "High Intensity Distance — metros que corriste a máxima intensidad. Más HID = más dominaste el partido. Tu promedio de temporada es ~1050m en 70 min." },
-  sprintDist: { label: "Sprint Dist", unit: "m", color: C.green, emoji: "⚡",
-    tip: "Distancia total que recorriste sprintando. Muestra qué tan explosivo fuiste. Los sprints son los momentos donde marcas la diferencia." },
-  sprints: { label: "Sprints", unit: "", color: C.orange, emoji: "🏃",
-    tip: "Número de veces que aceleraste al máximo. Más sprints = más veces atacaste o defendiste a toda velocidad." },
-  workRate: { label: "Work Rate", unit: "%", color: C.purple, emoji: "💪",
-    tip: "Qué porcentaje de tu capacidad máxima usaste. 60%+ es muy bueno para 45 minutos. Mide tu compromiso total." },
-  hsr: { label: "HSR", unit: "m", color: C.amber, emoji: "🚀",
-    tip: "High Speed Running — metros corridos a velocidad alta (no sprint). Complementa al HID — muestra ritmo sostenido, no solo picos." },
-  decelRatio: { label: "Decel/Accel", unit: "", color: C.red, emoji: "🛡️",
-    tip: "Frenones vs arrancones. Si frenas más de lo que arrancas (>1.1), tus músculos se cansan más y hay riesgo de lesión. <1.05 es ideal." },
+  hid: {
+    label: "HID",
+    unit: "m",
+    color: C.accent,
+    emoji: "🔥",
+    tip: "High Intensity Distance — metros que corriste a máxima intensidad. Más HID = más dominaste el partido. Tu promedio de temporada es ~1050m en 70 min."
+  },
+  sprintDist: {
+    label: "Sprint Dist",
+    unit: "m",
+    color: C.green,
+    emoji: "⚡",
+    tip: "Distancia total que recorriste sprintando. Muestra qué tan explosivo fuiste. Los sprints son los momentos donde marcas la diferencia."
+  },
+  sprints: {
+    label: "Sprints",
+    unit: "",
+    color: C.orange,
+    emoji: "🏃",
+    tip: "Número de veces que aceleraste al máximo. Más sprints = más veces atacaste o defendiste a toda velocidad."
+  },
+  workRate: {
+    label: "Work Rate",
+    unit: "%",
+    color: C.purple,
+    emoji: "💪",
+    tip: "Qué porcentaje de tu capacidad máxima usaste. 60%+ es muy bueno para 45 minutos. Mide tu compromiso total."
+  },
+  hsr: {
+    label: "HSR",
+    unit: "m",
+    color: C.amber,
+    emoji: "🚀",
+    tip: "High Speed Running — metros corridos a velocidad alta (no sprint). Complementa al HID — muestra ritmo sostenido, no solo picos."
+  },
+  decelRatio: {
+    label: "Decel/Accel",
+    unit: "",
+    color: C.red,
+    emoji: "🛡️",
+    tip: "Frenones vs arrancones. Si frenas más de lo que arrancas (>1.1), tus músculos se cansan más y hay riesgo de lesión. <1.05 es ideal."
+  }
 };
-
 function PlayoffsTab() {
   const [activeMetric, setActiveMetric] = useState(null);
   const chartData = MLS_CUP_DATA.map(g => ({
     name: `vs ${g.opponent}`,
     date: g.date,
     result: g.result,
-    goals: g.goals, assists: g.assists,
-    hid: g.hid, sprintDist: g.sprintDist, sprints: g.sprints,
-    workRate: g.workRate, hsr: g.hsr,
+    goals: g.goals,
+    assists: g.assists,
+    hid: g.hid,
+    sprintDist: g.sprintDist,
+    sprints: g.sprints,
+    workRate: g.workRate,
+    hsr: g.hsr,
     decelRatio: +(g.decel / g.accel).toFixed(2),
-    hidMin: g.hidMin, maxSpeed: g.maxSpeed, avgHR: g.avgHR, rpe: g.rpe,
+    hidMin: g.hidMin,
+    maxSpeed: g.maxSpeed,
+    avgHR: g.avgHR,
+    rpe: g.rpe
   }));
 
   // Normalize for multi-line chart (0-100%)
   const metrics = ["hid", "sprintDist", "sprints", "workRate", "hsr"];
   const maxVals = {};
-  metrics.forEach(m => { maxVals[m] = Math.max(...chartData.map(d => d[m])); });
+  metrics.forEach(m => {
+    maxVals[m] = Math.max(...chartData.map(d => d[m]));
+  });
   const normData = chartData.map(d => {
-    const nd = { ...d };
-    metrics.forEach(m => { nd[m + "Pct"] = maxVals[m] > 0 ? Math.round((d[m] / maxVals[m]) * 100) : 0; });
+    const nd = {
+      ...d
+    };
+    metrics.forEach(m => {
+      nd[m + "Pct"] = maxVals[m] > 0 ? Math.round(d[m] / maxVals[m] * 100) : 0;
+    });
     return nd;
   });
-
-  const CustomTooltip = ({ active, payload, label }) => {
-    if (!active || !payload?.length) return null;
-    const d = payload[0]?.payload;
-    return (
-      <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 16px", maxWidth: 280 }}>
-        <p style={{ color: C.accent, fontWeight: 700, fontSize: 13, margin: "0 0 4px" }}>{label}</p>
-        <p style={{ color: C.dim, fontSize: 10, margin: "0 0 10px", fontFamily: "'Space Mono', monospace" }}>{d?.date} · {d?.result} {d?.goals > 0 ? `⚽${d.goals}` : ""}{d?.assists > 0 ? ` 🅰️${d.assists}` : ""}</p>
-        {payload.map((p, i) => {
-          const key = p.dataKey.replace("Pct", "");
-          const info = METRIC_INFO[key];
-          const raw = d?.[key];
-          return info ? (
-            <div key={i} style={{ marginBottom: 6 }}>
-              <span style={{ color: p.color, fontSize: 11, fontWeight: 700 }}>{info.emoji} {info.label}: </span>
-              <span style={{ color: C.text, fontSize: 11, fontFamily: "'Space Mono', monospace" }}>{raw}{info.unit}</span>
-            </div>
-          ) : null;
-        })}
-      </div>
-    );
+  const CustomTooltip = ({
+    active,
+    payload,
+    label
+  }) => {
+    var _payload$3;
+    if (!active || !(payload !== null && payload !== void 0 && payload.length)) return null;
+    const d = (_payload$3 = payload[0]) === null || _payload$3 === void 0 ? void 0 : _payload$3.payload;
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: C.panel,
+        border: `1px solid ${C.border}`,
+        borderRadius: 10,
+        padding: "12px 16px",
+        maxWidth: 280
+      }
+    }, /*#__PURE__*/React.createElement("p", {
+      style: {
+        color: C.accent,
+        fontWeight: 700,
+        fontSize: 13,
+        margin: "0 0 4px"
+      }
+    }, label), /*#__PURE__*/React.createElement("p", {
+      style: {
+        color: C.dim,
+        fontSize: 10,
+        margin: "0 0 10px",
+        fontFamily: "'Space Mono', monospace"
+      }
+    }, d === null || d === void 0 ? void 0 : d.date, " · ", d === null || d === void 0 ? void 0 : d.result, " ", (d === null || d === void 0 ? void 0 : d.goals) > 0 ? `⚽${d.goals}` : "", (d === null || d === void 0 ? void 0 : d.assists) > 0 ? ` 🅰️${d.assists}` : ""), payload.map((p, i) => {
+      const key = p.dataKey.replace("Pct", "");
+      const info = METRIC_INFO[key];
+      const raw = d === null || d === void 0 ? void 0 : d[key];
+      return info ? /*#__PURE__*/React.createElement("div", {
+        key: i,
+        style: {
+          marginBottom: 6
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        style: {
+          color: p.color,
+          fontSize: 11,
+          fontWeight: 700
+        }
+      }, info.emoji, " ", info.label, ": "), /*#__PURE__*/React.createElement("span", {
+        style: {
+          color: C.text,
+          fontSize: 11,
+          fontFamily: "'Space Mono', monospace"
+        }
+      }, raw, info.unit)) : null;
+    }));
   };
-
-  const seasonAvg = { hid: 1050, sprintDist: 450, sprints: 28, workRate: 62, hsr: 180 };
-
-  return (
-    <div>
-      <div style={{ background: `linear-gradient(135deg, ${C.panel} 0%, #0a1a2e 100%)`, border: `1px solid ${C.border}`, borderRadius: 14, padding: "20px 24px", marginBottom: 20 }}>
-        <p style={{ color: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace", letterSpacing: 3, textTransform: "uppercase", margin: "0 0 6px" }}>MLS NEXT CUP PLAYOFFS</p>
-        <h2 style={{ color: C.accent, fontSize: 22, fontWeight: 800, margin: "0 0 6px" }}>Salt Lake City · 1,300m de altitud</h2>
-        <p style={{ color: C.text, fontSize: 13, margin: "0 0 12px", lineHeight: 1.5 }}>
-          4 partidos en 3 días. Llegaste con el gemelo lastimado y a una altitud que te quitó el aire.
-          <span style={{ color: C.green, fontWeight: 700 }}> Tu cuerpo se adaptó partido a partido</span> — mira las líneas subir.
-        </p>
-        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-          {[
-            { label: "Récord", val: "2W · 2L", sub: "1G · 1A", color: C.text },
-            { label: "HID Máx", val: "1,071m", sub: "vs SFFA — tu mejor número", color: C.accent },
-            { label: "Sprints Máx", val: "30", sub: "vs SFFA — récord playoffs", color: C.green },
-            { label: "Adaptación", val: "+68%", sub: "HID del primer al último partido", color: C.amber },
-          ].map((s, i) => (
-            <div key={i} style={{ flex: 1, minWidth: 120, textAlign: "center" }}>
-              <p style={{ color: C.dim, fontSize: 8, fontFamily: "'Space Mono', monospace", letterSpacing: 2, textTransform: "uppercase", margin: "0 0 4px" }}>{s.label}</p>
-              <p style={{ color: s.color, fontSize: 20, fontWeight: 800, margin: "0 0 2px" }}>{s.val}</p>
-              <p style={{ color: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace", margin: 0 }}>{s.sub}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <ST>TU PROGRESIÓN — cada línea es una métrica (pasa el cursor para entender cada una)</ST>
-      <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, padding: "16px 12px 8px", marginBottom: 16 }}>
-        <ResponsiveContainer width="100%" height={320}>
-          <LineChart data={normData} margin={{ top: 10, right: 20, bottom: 5, left: 0 }}>
-            <CartesianGrid stroke={C.muted} strokeDasharray="3 3" />
-            <XAxis dataKey="name" tick={{ fill: C.dim, fontSize: 10, fontFamily: "'Space Mono', monospace" }} />
-            <YAxis domain={[0, 105]} tick={{ fill: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace" }} label={{ value: "% de tu máximo", angle: -90, position: "insideLeft", fill: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace" }} />
-            <Tooltip content={<CustomTooltip />} />
-            {metrics.map(m => (
-              <Line key={m} type="monotone" dataKey={m + "Pct"} name={METRIC_INFO[m].label}
-                stroke={METRIC_INFO[m].color} strokeWidth={activeMetric === m ? 4 : 2}
-                dot={{ r: activeMetric === m ? 6 : 4, fill: METRIC_INFO[m].color }}
-                opacity={activeMetric && activeMetric !== m ? 0.25 : 1} />
-            ))}
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
-        <button onClick={() => setActiveMetric(null)} style={{ background: !activeMetric ? C.accent : "transparent", color: !activeMetric ? "#000" : C.dim, border: `1px solid ${!activeMetric ? C.accent : C.border}`, borderRadius: 6, padding: "5px 12px", fontSize: 10, fontFamily: "'Space Mono', monospace", cursor: "pointer" }}>TODAS</button>
-        {metrics.map(m => (
-          <button key={m} onClick={() => setActiveMetric(activeMetric === m ? null : m)} style={{ background: activeMetric === m ? METRIC_INFO[m].color : "transparent", color: activeMetric === m ? "#000" : METRIC_INFO[m].color, border: `1px solid ${activeMetric === m ? METRIC_INFO[m].color : C.border}`, borderRadius: 6, padding: "5px 12px", fontSize: 10, fontFamily: "'Space Mono', monospace", cursor: "pointer" }}>
-            {METRIC_INFO[m].emoji} {METRIC_INFO[m].label}
-          </button>
-        ))}
-      </div>
-
-      {activeMetric && METRIC_INFO[activeMetric] && (
-        <div style={{ background: C.panel2, border: `1px solid ${METRIC_INFO[activeMetric].color}40`, borderRadius: 10, padding: "14px 18px", marginBottom: 16 }}>
-          <p style={{ color: METRIC_INFO[activeMetric].color, fontSize: 13, fontWeight: 700, margin: "0 0 6px" }}>{METRIC_INFO[activeMetric].emoji} {METRIC_INFO[activeMetric].label}</p>
-          <p style={{ color: C.text, fontSize: 12, lineHeight: 1.6, margin: 0 }}>{METRIC_INFO[activeMetric].tip}</p>
-        </div>
-      )}
-
-      <ST>DECEL / ACCEL — el indicador que predice lesiones</ST>
-      <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, padding: "16px 12px 8px", marginBottom: 16 }}>
-        <ResponsiveContainer width="100%" height={200}>
-          <ComposedChart data={chartData} margin={{ top: 10, right: 20, bottom: 5, left: 0 }}>
-            <CartesianGrid stroke={C.muted} strokeDasharray="3 3" />
-            <XAxis dataKey="name" tick={{ fill: C.dim, fontSize: 10, fontFamily: "'Space Mono', monospace" }} />
-            <YAxis domain={[0.8, 1.4]} tick={{ fill: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace" }} />
-            <ReferenceLine y={1.1} stroke={C.amber} strokeDasharray="5 5" label={{ value: "Zona riesgo 1.1", fill: C.amber, fontSize: 9, fontFamily: "'Space Mono', monospace" }} />
-            <ReferenceLine y={1.0} stroke={C.green} strokeDasharray="5 5" label={{ value: "Ideal 1.0", fill: C.green, fontSize: 9, fontFamily: "'Space Mono', monospace" }} />
-            <Bar dataKey="decelRatio" name="Decel/Accel" radius={[6, 6, 0, 0]} barSize={36}>
-              {chartData.map((d, i) => (
-                <Cell key={i} fill={d.decelRatio > 1.15 ? C.red : d.decelRatio > 1.05 ? C.amber : C.green} />
-              ))}
-            </Bar>
-            <Tooltip {...TOOLTIP} formatter={(val) => [val.toFixed(2), "Decel/Accel"]} />
-          </ComposedChart>
-        </ResponsiveContainer>
-        <p style={{ color: C.dim, fontSize: 10, fontFamily: "'Space Mono', monospace", padding: "8px 8px 0", lineHeight: 1.5 }}>
-          {METRIC_INFO.decelRatio.tip}
-          <br /><span style={{ color: C.green }}>✓ Último partido en 1.02 — zona segura. Tu gemelo se está recuperando.</span>
-        </p>
-      </div>
-
-      <ST>DETALLE POR PARTIDO</ST>
-      <div style={{ overflowX: "auto" }}>
-        <table>
-          <thead>
-            <tr>
-              {["#", "Rival", "Fecha", "Score", "G/A", "HID", "HID/min", "Sprints", "Sprint Dist", "HSR", "Work Rate", "Max Speed", "Avg HR", "RPE"].map(h => <th key={h}>{h}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {MLS_CUP_DATA.map((g, i) => {
-              const isW = g.result.startsWith("W");
-              return (
-                <tr key={i}>
-                  <td style={{ color: C.accent }}>{g.game}</td>
-                  <td style={{ fontWeight: 700 }}>{g.opponent}</td>
-                  <td>{g.date}</td>
-                  <td style={{ color: isW ? C.green : C.red, fontWeight: 700 }}>{g.result}</td>
-                  <td>{g.goals > 0 ? `⚽${g.goals}` : ""}{g.assists > 0 ? `🅰️${g.assists}` : ""}{g.goals === 0 && g.assists === 0 ? "—" : ""}</td>
-                  <td style={{ color: g.hid >= 1000 ? C.green : C.text }}>{g.hid}m</td>
-                  <td style={{ color: g.hidMin >= 20 ? C.accent : C.text }}>{g.hidMin}</td>
-                  <td style={{ color: g.sprints >= 24 ? C.green : C.text }}>{g.sprints}</td>
-                  <td>{g.sprintDist}m</td>
-                  <td>{g.hsr}m</td>
-                  <td>{g.workRate}%</td>
-                  <td>{g.maxSpeed}</td>
-                  <td style={{ color: g.avgHR >= 155 ? C.amber : C.text }}>{g.avgHR}</td>
-                  <td>{g.rpe}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      <div style={{ marginTop: 20, background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 10, padding: "14px 18px" }}>
-        <p style={{ color: C.accent, fontSize: 10, fontFamily: "'Space Mono', monospace", letterSpacing: 2, textTransform: "uppercase", margin: "0 0 8px" }}>💡 ¿QUÉ SIGNIFICA ESTO PARA TI?</p>
-        <p style={{ color: C.text, fontSize: 12, lineHeight: 1.7, margin: 0 }}>
-          Llegaste a Salt Lake City con el gemelo lastimado y a 1,300m de altitud — condiciones que hacen que correr sea mucho más difícil.
-          En tu primer partido, tu cuerpo produjo solo la mitad de lo normal. Pero <strong style={{ color: C.green }}>partido a partido fuiste subiendo</strong>: tu HID creció 68%, tus sprints se duplicaron, y tu corazón se adaptó (latía menos para hacer más).
-          <br /><br />
-          <strong style={{ color: C.accent }}>El mensaje clave:</strong> tu cuerpo es capaz de adaptarse rápido — pero necesita tiempo.
-          Por eso la recuperación antes de Madrid (Jul 12) es crítica: si llegas sano y preparado, puedes rendir a tu nivel máximo desde el primer partido, no desde el tercero.
-        </p>
-      </div>
-    </div>
-  );
+  const seasonAvg = {
+    hid: 1050,
+    sprintDist: 450,
+    sprints: 28,
+    workRate: 62,
+    hsr: 180
+  };
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: `linear-gradient(135deg, ${C.panel} 0%, #0a1a2e 100%)`,
+      border: `1px solid ${C.border}`,
+      borderRadius: 14,
+      padding: "20px 24px",
+      marginBottom: 20
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.dim,
+      fontSize: 9,
+      fontFamily: "'Space Mono', monospace",
+      letterSpacing: 3,
+      textTransform: "uppercase",
+      margin: "0 0 6px"
+    }
+  }, "MLS NEXT CUP PLAYOFFS"), /*#__PURE__*/React.createElement("h2", {
+    style: {
+      color: C.accent,
+      fontSize: 22,
+      fontWeight: 800,
+      margin: "0 0 6px"
+    }
+  }, "Salt Lake City · 1,300m de altitud"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.text,
+      fontSize: 13,
+      margin: "0 0 12px",
+      lineHeight: 1.5
+    }
+  }, "4 partidos en 3 días. Llegaste con el gemelo lastimado y a una altitud que te quitó el aire.", /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: C.green,
+      fontWeight: 700
+    }
+  }, " Tu cuerpo se adaptó partido a partido"), " — mira las líneas subir."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 16,
+      flexWrap: "wrap"
+    }
+  }, [{
+    label: "Récord",
+    val: "2W · 2L",
+    sub: "1G · 1A",
+    color: C.text
+  }, {
+    label: "HID Máx",
+    val: "1,071m",
+    sub: "vs SFFA — tu mejor número",
+    color: C.accent
+  }, {
+    label: "Sprints Máx",
+    val: "30",
+    sub: "vs SFFA — récord playoffs",
+    color: C.green
+  }, {
+    label: "Adaptación",
+    val: "+68%",
+    sub: "HID del primer al último partido",
+    color: C.amber
+  }].map((s, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      flex: 1,
+      minWidth: 120,
+      textAlign: "center"
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.dim,
+      fontSize: 8,
+      fontFamily: "'Space Mono', monospace",
+      letterSpacing: 2,
+      textTransform: "uppercase",
+      margin: "0 0 4px"
+    }
+  }, s.label), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: s.color,
+      fontSize: 20,
+      fontWeight: 800,
+      margin: "0 0 2px"
+    }
+  }, s.val), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.dim,
+      fontSize: 9,
+      fontFamily: "'Space Mono', monospace",
+      margin: 0
+    }
+  }, s.sub))))), /*#__PURE__*/React.createElement(ST, null, "TU PROGRESIÓN — cada línea es una métrica (pasa el cursor para entender cada una)"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.panel,
+      border: `1px solid ${C.border}`,
+      borderRadius: 12,
+      padding: "16px 12px 8px",
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement(ResponsiveContainer, {
+    width: "100%",
+    height: 320
+  }, /*#__PURE__*/React.createElement(LineChart, {
+    data: normData,
+    margin: {
+      top: 10,
+      right: 20,
+      bottom: 5,
+      left: 0
+    }
+  }, /*#__PURE__*/React.createElement(CartesianGrid, {
+    stroke: C.muted,
+    strokeDasharray: "3 3"
+  }), /*#__PURE__*/React.createElement(XAxis, {
+    dataKey: "name",
+    tick: {
+      fill: C.dim,
+      fontSize: 10,
+      fontFamily: "'Space Mono', monospace"
+    }
+  }), /*#__PURE__*/React.createElement(YAxis, {
+    domain: [0, 105],
+    tick: {
+      fill: C.dim,
+      fontSize: 9,
+      fontFamily: "'Space Mono', monospace"
+    },
+    label: {
+      value: "% de tu máximo",
+      angle: -90,
+      position: "insideLeft",
+      fill: C.dim,
+      fontSize: 9,
+      fontFamily: "'Space Mono', monospace"
+    }
+  }), /*#__PURE__*/React.createElement(Tooltip, {
+    content: /*#__PURE__*/React.createElement(CustomTooltip, null)
+  }), metrics.map(m => /*#__PURE__*/React.createElement(Line, {
+    key: m,
+    type: "monotone",
+    dataKey: m + "Pct",
+    name: METRIC_INFO[m].label,
+    stroke: METRIC_INFO[m].color,
+    strokeWidth: activeMetric === m ? 4 : 2,
+    dot: {
+      r: activeMetric === m ? 6 : 4,
+      fill: METRIC_INFO[m].color
+    },
+    opacity: activeMetric && activeMetric !== m ? 0.25 : 1
+  }))))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      flexWrap: "wrap",
+      marginBottom: 20
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setActiveMetric(null),
+    style: {
+      background: !activeMetric ? C.accent : "transparent",
+      color: !activeMetric ? "#000" : C.dim,
+      border: `1px solid ${!activeMetric ? C.accent : C.border}`,
+      borderRadius: 6,
+      padding: "5px 12px",
+      fontSize: 10,
+      fontFamily: "'Space Mono', monospace",
+      cursor: "pointer"
+    }
+  }, "TODAS"), metrics.map(m => /*#__PURE__*/React.createElement("button", {
+    key: m,
+    onClick: () => setActiveMetric(activeMetric === m ? null : m),
+    style: {
+      background: activeMetric === m ? METRIC_INFO[m].color : "transparent",
+      color: activeMetric === m ? "#000" : METRIC_INFO[m].color,
+      border: `1px solid ${activeMetric === m ? METRIC_INFO[m].color : C.border}`,
+      borderRadius: 6,
+      padding: "5px 12px",
+      fontSize: 10,
+      fontFamily: "'Space Mono', monospace",
+      cursor: "pointer"
+    }
+  }, METRIC_INFO[m].emoji, " ", METRIC_INFO[m].label))), activeMetric && METRIC_INFO[activeMetric] && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.panel2,
+      border: `1px solid ${METRIC_INFO[activeMetric].color}40`,
+      borderRadius: 10,
+      padding: "14px 18px",
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: METRIC_INFO[activeMetric].color,
+      fontSize: 13,
+      fontWeight: 700,
+      margin: "0 0 6px"
+    }
+  }, METRIC_INFO[activeMetric].emoji, " ", METRIC_INFO[activeMetric].label), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.text,
+      fontSize: 12,
+      lineHeight: 1.6,
+      margin: 0
+    }
+  }, METRIC_INFO[activeMetric].tip)), /*#__PURE__*/React.createElement(ST, null, "DECEL / ACCEL — el indicador que predice lesiones"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.panel,
+      border: `1px solid ${C.border}`,
+      borderRadius: 12,
+      padding: "16px 12px 8px",
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement(ResponsiveContainer, {
+    width: "100%",
+    height: 200
+  }, /*#__PURE__*/React.createElement(ComposedChart, {
+    data: chartData,
+    margin: {
+      top: 10,
+      right: 20,
+      bottom: 5,
+      left: 0
+    }
+  }, /*#__PURE__*/React.createElement(CartesianGrid, {
+    stroke: C.muted,
+    strokeDasharray: "3 3"
+  }), /*#__PURE__*/React.createElement(XAxis, {
+    dataKey: "name",
+    tick: {
+      fill: C.dim,
+      fontSize: 10,
+      fontFamily: "'Space Mono', monospace"
+    }
+  }), /*#__PURE__*/React.createElement(YAxis, {
+    domain: [0.8, 1.4],
+    tick: {
+      fill: C.dim,
+      fontSize: 9,
+      fontFamily: "'Space Mono', monospace"
+    }
+  }), /*#__PURE__*/React.createElement(ReferenceLine, {
+    y: 1.1,
+    stroke: C.amber,
+    strokeDasharray: "5 5",
+    label: {
+      value: "Zona riesgo 1.1",
+      fill: C.amber,
+      fontSize: 9,
+      fontFamily: "'Space Mono', monospace"
+    }
+  }), /*#__PURE__*/React.createElement(ReferenceLine, {
+    y: 1.0,
+    stroke: C.green,
+    strokeDasharray: "5 5",
+    label: {
+      value: "Ideal 1.0",
+      fill: C.green,
+      fontSize: 9,
+      fontFamily: "'Space Mono', monospace"
+    }
+  }), /*#__PURE__*/React.createElement(Bar, {
+    dataKey: "decelRatio",
+    name: "Decel/Accel",
+    radius: [6, 6, 0, 0],
+    barSize: 36
+  }, chartData.map((d, i) => /*#__PURE__*/React.createElement(Cell, {
+    key: i,
+    fill: d.decelRatio > 1.15 ? C.red : d.decelRatio > 1.05 ? C.amber : C.green
+  }))), /*#__PURE__*/React.createElement(Tooltip, {
+    ...TOOLTIP,
+    formatter: val => [val.toFixed(2), "Decel/Accel"]
+  }))), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.dim,
+      fontSize: 10,
+      fontFamily: "'Space Mono', monospace",
+      padding: "8px 8px 0",
+      lineHeight: 1.5
+    }
+  }, METRIC_INFO.decelRatio.tip, /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: C.green
+    }
+  }, "✓ Último partido en 1.02 — zona segura. Tu gemelo se está recuperando."))), /*#__PURE__*/React.createElement(ST, null, "DETALLE POR PARTIDO"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      overflowX: "auto"
+    }
+  }, /*#__PURE__*/React.createElement("table", null, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, ["#", "Rival", "Fecha", "Score", "G/A", "HID", "HID/min", "Sprints", "Sprint Dist", "HSR", "Work Rate", "Max Speed", "Avg HR", "RPE"].map(h => /*#__PURE__*/React.createElement("th", {
+    key: h
+  }, h)))), /*#__PURE__*/React.createElement("tbody", null, MLS_CUP_DATA.map((g, i) => {
+    const isW = g.result.startsWith("W");
+    return /*#__PURE__*/React.createElement("tr", {
+      key: i
+    }, /*#__PURE__*/React.createElement("td", {
+      style: {
+        color: C.accent
+      }
+    }, g.game), /*#__PURE__*/React.createElement("td", {
+      style: {
+        fontWeight: 700
+      }
+    }, g.opponent), /*#__PURE__*/React.createElement("td", null, g.date), /*#__PURE__*/React.createElement("td", {
+      style: {
+        color: isW ? C.green : C.red,
+        fontWeight: 700
+      }
+    }, g.result), /*#__PURE__*/React.createElement("td", null, g.goals > 0 ? `⚽${g.goals}` : "", g.assists > 0 ? `🅰️${g.assists}` : "", g.goals === 0 && g.assists === 0 ? "—" : ""), /*#__PURE__*/React.createElement("td", {
+      style: {
+        color: g.hid >= 1000 ? C.green : C.text
+      }
+    }, g.hid, "m"), /*#__PURE__*/React.createElement("td", {
+      style: {
+        color: g.hidMin >= 20 ? C.accent : C.text
+      }
+    }, g.hidMin), /*#__PURE__*/React.createElement("td", {
+      style: {
+        color: g.sprints >= 24 ? C.green : C.text
+      }
+    }, g.sprints), /*#__PURE__*/React.createElement("td", null, g.sprintDist, "m"), /*#__PURE__*/React.createElement("td", null, g.hsr, "m"), /*#__PURE__*/React.createElement("td", null, g.workRate, "%"), /*#__PURE__*/React.createElement("td", null, g.maxSpeed), /*#__PURE__*/React.createElement("td", {
+      style: {
+        color: g.avgHR >= 155 ? C.amber : C.text
+      }
+    }, g.avgHR), /*#__PURE__*/React.createElement("td", null, g.rpe));
+  })))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 20,
+      background: C.panel2,
+      border: `1px solid ${C.border}`,
+      borderRadius: 10,
+      padding: "14px 18px"
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.accent,
+      fontSize: 10,
+      fontFamily: "'Space Mono', monospace",
+      letterSpacing: 2,
+      textTransform: "uppercase",
+      margin: "0 0 8px"
+    }
+  }, "💡 ¿QUÉ SIGNIFICA ESTO PARA TI?"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.text,
+      fontSize: 12,
+      lineHeight: 1.7,
+      margin: 0
+    }
+  }, "Llegaste a Salt Lake City con el gemelo lastimado y a 1,300m de altitud — condiciones que hacen que correr sea mucho más difícil. En tu primer partido, tu cuerpo produjo solo la mitad de lo normal. Pero ", /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: C.green
+    }
+  }, "partido a partido fuiste subiendo"), ": tu HID creció 68%, tus sprints se duplicaron, y tu corazón se adaptó (latía menos para hacer más).", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: C.accent
+    }
+  }, "El mensaje clave:"), " tu cuerpo es capaz de adaptarse rápido — pero necesita tiempo. Por eso la recuperación antes de Madrid (Jul 12) es crítica: si llegas sano y preparado, puedes rendir a tu nivel máximo desde el primer partido, no desde el tercero.")));
 }
 
 // ───── Recovery Tab Functions ───────────────────────────────────────────────
 function luisReport(matches) {
+  var _latest$acwr$toFixed, _latest$acwr;
   if (!matches.length) return "";
   const withACWR = computeACWR(matches);
   const last4 = withACWR.slice(-4);
@@ -1106,16 +3155,9 @@ function luisReport(matches) {
   }).join("\n");
 
   // Intelligent interpretation
-  const acwrMsg = latest?.acwr > 1.5 ? "OVERLOAD — el cuerpo acumuló demasiada carga en pocos días. Recuperación es prioridad absoluta."
-    : latest?.acwr > 1.3 ? "ELEVADO — 4 partidos en 3 días dejaron carga alta. Necesita descarga activa antes de volver a intensidad."
-    : "OK — carga manejable.";
-  const decelMsg = accel > 0 && decel > accel * 1.1
-    ? `El ratio Decel/Accel (${decelRatio}) indica que Mateo frenó más de lo que arrancó. Esto sobrecarga isquios, sóleo y gemelos — exactamente la cadena que ya tiene comprometida.`
-    : `Ratio Decel/Accel (${decelRatio}) balanceado — buena señal.`;
-  const hidMsg = avgHIDMin > 18 ? `HID/min promedio de ${avgHIDMin.toFixed(1)} es MUY alto — en los últimos 2 partidos rindió a nivel élite (>20 m/min). El cuerpo produjo mucho pero el costo muscular fue alto.`
-    : avgHIDMin > 14 ? `HID/min promedio de ${avgHIDMin.toFixed(1)} está en su rango normal — buen rendimiento sostenido.`
-    : `HID/min promedio de ${avgHIDMin.toFixed(1)} está por debajo de lo normal — posible efecto de altitud o fatiga.`;
-
+  const acwrMsg = (latest === null || latest === void 0 ? void 0 : latest.acwr) > 1.5 ? "OVERLOAD — el cuerpo acumuló demasiada carga en pocos días. Recuperación es prioridad absoluta." : (latest === null || latest === void 0 ? void 0 : latest.acwr) > 1.3 ? "ELEVADO — 4 partidos en 3 días dejaron carga alta. Necesita descarga activa antes de volver a intensidad." : "OK — carga manejable.";
+  const decelMsg = accel > 0 && decel > accel * 1.1 ? `El ratio Decel/Accel (${decelRatio}) indica que Mateo frenó más de lo que arrancó. Esto sobrecarga isquios, sóleo y gemelos — exactamente la cadena que ya tiene comprometida.` : `Ratio Decel/Accel (${decelRatio}) balanceado — buena señal.`;
+  const hidMsg = avgHIDMin > 18 ? `HID/min promedio de ${avgHIDMin.toFixed(1)} es MUY alto — en los últimos 2 partidos rindió a nivel élite (>20 m/min). El cuerpo produjo mucho pero el costo muscular fue alto.` : avgHIDMin > 14 ? `HID/min promedio de ${avgHIDMin.toFixed(1)} está en su rango normal — buen rendimiento sostenido.` : `HID/min promedio de ${avgHIDMin.toFixed(1)} está por debajo de lo normal — posible efecto de altitud o fatiga.`;
   return `Luis · Reporte de carga | ${new Date().toLocaleDateString("es-MX")}
 
 ÚLTIMOS ${last4.length} PARTIDOS (MLS Next Cup, Salt Lake City 1300m):
@@ -1125,7 +3167,7 @@ RESUMEN FÍSICO:
 • Carga total: ${totalLoad} UA en ${totalMins} min (4 partidos en 3 días)
 • HID/min promedio: ${avgHIDMin.toFixed(1)}
 • Sprints totales: ${totalSprints} | Sprint distance: ${totalSprintDist}m
-• ACWR actual: ${latest?.acwr?.toFixed(2) ?? "—"} → ${acwrMsg}
+• ACWR actual: ${(_latest$acwr$toFixed = latest === null || latest === void 0 || (_latest$acwr = latest.acwr) === null || _latest$acwr === void 0 ? void 0 : _latest$acwr.toFixed(2)) !== null && _latest$acwr$toFixed !== void 0 ? _latest$acwr$toFixed : "—"} → ${acwrMsg}
 • Decel/Accel: ${decelRatio} → ${decelRisk}${maxSp > 0 ? `\n• Max Speed: ${maxSp.toFixed(2)} m/s` : ""}
 
 INTERPRETACIÓN:
@@ -1164,86 +3206,220 @@ Sem 5-6 (Jun 29-Jul 11): PICO + TAPERING
 }
 
 // ───── Recovery Tab UI ─────────────────────────────────────────────────────
-function RecoveryTab({ matches }) {
-  return (
-    <div>
-      <ST>PLAN CON LUIS TRUJILLO — Fuerza Funcional</ST>
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
-        <ToolCard title="REPORTE PARA LUIS" icon="💪" body={luisReport(matches)} />
-      </div>
-
-      <ST>OBJETIVO: 100% PARA MADRID — Jul 12-19</ST>
-      <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, padding: "16px 18px", marginBottom: 16 }}>
-        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-          {[
-            { week: "Jun 1-14", phase: "RECUPERACIÓN", desc: "Movilidad, masaje, calf rehab. Cero impacto. Dormir 9-10h.", color: C.green, pct: "30%" },
-            { week: "Jun 15-28", phase: "REACONDICIONAMIENTO", desc: "Fuerza funcional progresiva. Carrera suave. Introducir cambios de dirección.", color: C.amber, pct: "60%" },
-            { week: "Jun 29-Jul 11", phase: "PICO + TAPERING", desc: "Intensidad alta, volumen bajo. Simular ritmo de partido. Descanso previo al torneo.", color: C.accent, pct: "90%" },
-          ].map((p, i) => (
-            <div key={i} style={{ flex: 1, minWidth: 200, background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 10, padding: "14px 16px" }}>
-              <p style={{ color: C.dim, fontSize: 8, fontFamily: "'Space Mono', monospace", letterSpacing: 2, textTransform: "uppercase", margin: "0 0 4px" }}>{p.week}</p>
-              <p style={{ color: p.color, fontSize: 14, fontWeight: 700, margin: "0 0 6px" }}>{p.phase}</p>
-              <div style={{ background: C.muted, borderRadius: 4, height: 6, marginBottom: 8 }}>
-                <div style={{ background: p.color, borderRadius: 4, height: 6, width: p.pct }} />
-              </div>
-              <p style={{ color: C.text, fontSize: 11, lineHeight: 1.5, margin: 0 }}>{p.desc}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <ST>PROTOCOLOS DE RECUPERACIÓN</ST>
-      <ReportBlock title="Gemelo Derecho — Prioridad #1" body="Lesión May 11 (gastrocnemio medial). Jugó 4 partidos en playoffs con molestia. Protocolo: evaluación ROM + dolor, masaje profundo 2x/sem, excéntricos progresivos (heel drops), NO sprints hasta semana 3." />
-      <ReportBlock title="Presoterapia" body="Rhino Performance. 30–45 min. 3x por semana durante fase de recuperación. Calf siempre incluido." />
-      <SleepBlock />
-      <DinnerBlock />
-    </div>
-  );
+function RecoveryTab({
+  matches
+}) {
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(ST, null, "PLAN CON LUIS TRUJILLO — Fuerza Funcional"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 12,
+      flexWrap: "wrap",
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement(ToolCard, {
+    title: "REPORTE PARA LUIS",
+    icon: "💪",
+    body: luisReport(matches)
+  })), /*#__PURE__*/React.createElement(ST, null, "OBJETIVO: 100% PARA MADRID — Jul 12-19"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.panel,
+      border: `1px solid ${C.border}`,
+      borderRadius: 12,
+      padding: "16px 18px",
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 16,
+      flexWrap: "wrap"
+    }
+  }, [{
+    week: "Jun 1-14",
+    phase: "RECUPERACIÓN",
+    desc: "Movilidad, masaje, calf rehab. Cero impacto. Dormir 9-10h.",
+    color: C.green,
+    pct: "30%"
+  }, {
+    week: "Jun 15-28",
+    phase: "REACONDICIONAMIENTO",
+    desc: "Fuerza funcional progresiva. Carrera suave. Introducir cambios de dirección.",
+    color: C.amber,
+    pct: "60%"
+  }, {
+    week: "Jun 29-Jul 11",
+    phase: "PICO + TAPERING",
+    desc: "Intensidad alta, volumen bajo. Simular ritmo de partido. Descanso previo al torneo.",
+    color: C.accent,
+    pct: "90%"
+  }].map((p, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      flex: 1,
+      minWidth: 200,
+      background: C.panel2,
+      border: `1px solid ${C.border}`,
+      borderRadius: 10,
+      padding: "14px 16px"
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.dim,
+      fontSize: 8,
+      fontFamily: "'Space Mono', monospace",
+      letterSpacing: 2,
+      textTransform: "uppercase",
+      margin: "0 0 4px"
+    }
+  }, p.week), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: p.color,
+      fontSize: 14,
+      fontWeight: 700,
+      margin: "0 0 6px"
+    }
+  }, p.phase), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.muted,
+      borderRadius: 4,
+      height: 6,
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: p.color,
+      borderRadius: 4,
+      height: 6,
+      width: p.pct
+    }
+  })), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.text,
+      fontSize: 11,
+      lineHeight: 1.5,
+      margin: 0
+    }
+  }, p.desc))))), /*#__PURE__*/React.createElement(ST, null, "PROTOCOLOS DE RECUPERACIÓN"), /*#__PURE__*/React.createElement(ReportBlock, {
+    title: "Gemelo Derecho — Prioridad #1",
+    body: "Lesión May 11 (gastrocnemio medial). Jugó 4 partidos en playoffs con molestia. Protocolo: evaluación ROM + dolor, masaje profundo 2x/sem, excéntricos progresivos (heel drops), NO sprints hasta semana 3."
+  }), /*#__PURE__*/React.createElement(ReportBlock, {
+    title: "Presoterapia",
+    body: "Rhino Performance. 30–45 min. 3x por semana durante fase de recuperación. Calf siempre incluido."
+  }), /*#__PURE__*/React.createElement(SleepBlock, null), /*#__PURE__*/React.createElement(DinnerBlock, null));
 }
-
-function ToolCard({ title, icon, body }) {
+function ToolCard({
+  title,
+  icon,
+  body
+}) {
   const [copied, setCopied] = useState(false);
   const doCopy = () => {
-    navigator.clipboard?.writeText(body).then(() => {
+    var _navigator$clipboard;
+    (_navigator$clipboard = navigator.clipboard) === null || _navigator$clipboard === void 0 || _navigator$clipboard.writeText(body).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     });
   };
-  return (
-    <div style={{ flex: 1, minWidth: 280, background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, padding: "16px 18px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 12 }}>
-        <p style={{ color: C.dim, fontSize: 8, fontFamily: "'Space Mono', monospace", letterSpacing: 3, textTransform: "uppercase", margin: 0 }}>{icon} {title}</p>
-        <button onClick={doCopy} style={{ background: copied ? C.green : C.accent, color: "#000", border: "none", borderRadius: 4, padding: "4px 10px", fontSize: 9, fontFamily: "'Space Mono', monospace", cursor: "pointer" }}>
-          {copied ? "✓" : "📋"}
-        </button>
-      </div>
-      <p style={{ color: C.text, fontSize: 11, fontFamily: "'Space Mono', monospace", whiteSpace: "pre-wrap", lineHeight: 1.5, margin: 0 }}>{body}</p>
-    </div>
-  );
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      minWidth: 280,
+      background: C.panel,
+      border: `1px solid ${C.border}`,
+      borderRadius: 12,
+      padding: "16px 18px"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "start",
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.dim,
+      fontSize: 8,
+      fontFamily: "'Space Mono', monospace",
+      letterSpacing: 3,
+      textTransform: "uppercase",
+      margin: 0
+    }
+  }, icon, " ", title), /*#__PURE__*/React.createElement("button", {
+    onClick: doCopy,
+    style: {
+      background: copied ? C.green : C.accent,
+      color: "#000",
+      border: "none",
+      borderRadius: 4,
+      padding: "4px 10px",
+      fontSize: 9,
+      fontFamily: "'Space Mono', monospace",
+      cursor: "pointer"
+    }
+  }, copied ? "✓" : "📋")), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.text,
+      fontSize: 11,
+      fontFamily: "'Space Mono', monospace",
+      whiteSpace: "pre-wrap",
+      lineHeight: 1.5,
+      margin: 0
+    }
+  }, body));
 }
-
-function ReportBlock({ title, body }) {
-  return (
-    <div style={{ background: C.panel2, border: `1px solid ${C.border}`, borderRadius: 10, padding: "14px 16px", marginBottom: 12 }}>
-      <p style={{ color: C.accent, fontSize: 9, fontFamily: "'Space Mono', monospace", letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>{title}</p>
-      <p style={{ color: C.text, fontSize: 11, fontFamily: "'Space Mono', monospace", lineHeight: 1.6 }}>{body}</p>
-    </div>
-  );
+function ReportBlock({
+  title,
+  body
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.panel2,
+      border: `1px solid ${C.border}`,
+      borderRadius: 10,
+      padding: "14px 16px",
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.accent,
+      fontSize: 9,
+      fontFamily: "'Space Mono', monospace",
+      letterSpacing: 2,
+      textTransform: "uppercase",
+      marginBottom: 6
+    }
+  }, title), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.text,
+      fontSize: 11,
+      fontFamily: "'Space Mono', monospace",
+      lineHeight: 1.6
+    }
+  }, body));
 }
-
 function SleepBlock() {
-  return <ReportBlock title="Sleep Protocol" body="9–10 horas. Cama 21:00. Dark, cool, quiet. Magnesium glycinate 400mg 30min before bed. Avoid blue light 60min pre-sleep." />;
+  return /*#__PURE__*/React.createElement(ReportBlock, {
+    title: "Sleep Protocol",
+    body: "9–10 horas. Cama 21:00. Dark, cool, quiet. Magnesium glycinate 400mg 30min before bed. Avoid blue light 60min pre-sleep."
+  });
 }
-
 function DinnerBlock() {
-  return <ReportBlock title="Post-Match Dinner (within 45min)" body="Pollo 200g + Arroz blanco 300g + Verduras (brócoli, zanaoria) 150g. Bebida: Gatorade 500ml. Sin grasa, fácil digestión." />;
+  return /*#__PURE__*/React.createElement(ReportBlock, {
+    title: "Post-Match Dinner (within 45min)",
+    body: "Pollo 200g + Arroz blanco 300g + Verduras (brócoli, zanaoria) 150g. Bebida: Gatorade 500ml. Sin grasa, fácil digestión."
+  });
 }
 
 // ───── DASHBOARD COMPONENT & ROOT RENDER ───────────────────────────────────
 function Dashboard() {
-  const [data, setData] = useState({ matches: [], training: [], liveMatch: false, liveTraining: false });
+  const [data, setData] = useState({
+    matches: [],
+    training: [],
+    liveMatch: false,
+    liveTraining: false
+  });
   const [tab, setTab] = useState("matches");
-
   useEffect(() => {
     const tryFetch = async () => {
       try {
@@ -1257,72 +3433,129 @@ function Dashboard() {
           matches: matchRows.length ? matchRows : MATCH_SEED,
           training: trainingRows.length ? trainingRows : TRAINING_SEED,
           liveMatch: matchRows.length > 0,
-          liveTraining: trainingRows.length > 0,
+          liveTraining: trainingRows.length > 0
         });
       } catch {
-        setData({ matches: MATCH_SEED, training: TRAINING_SEED, liveMatch: false, liveTraining: false });
+        setData({
+          matches: MATCH_SEED,
+          training: TRAINING_SEED,
+          liveMatch: false,
+          liveTraining: false
+        });
       }
     };
     tryFetch();
   }, []);
-
   const allSessions = useMemo(() => [...data.matches, ...data.training], [data]);
   const unifiedACWR = useMemo(() => {
     if (!allSessions.length) return null;
     const withACWR = computeACWR(allSessions);
     return withACWR[withACWR.length - 1];
   }, [allSessions]);
-
   const matchOnlyACWR = useMemo(() => {
+    var _withACWR;
     if (!data.matches.length) return null;
     const withACWR = computeACWR(data.matches);
-    return withACWR[withACWR.length - 1]?.acwr;
+    return (_withACWR = withACWR[withACWR.length - 1]) === null || _withACWR === void 0 ? void 0 : _withACWR.acwr;
   }, [data.matches]);
-
   const trainingOnlyACWR = useMemo(() => {
+    var _withACWR2;
     if (!data.training.length) return null;
     const withACWR = computeACWR(data.training);
-    return withACWR[withACWR.length - 1]?.acwr;
+    return (_withACWR2 = withACWR[withACWR.length - 1]) === null || _withACWR2 === void 0 ? void 0 : _withACWR2.acwr;
   }, [data.training]);
-
   const daysSinceLastMatch = useMemo(() => {
     if (!data.matches.length) return null;
     const lastMatch = data.matches[data.matches.length - 1];
     return daysBetween(lastMatch.dateObj, new Date());
   }, [data.matches]);
-
-  return (
-    <div style={{ background: C.bg, minHeight: "100vh", padding: "20px 24px", color: C.text, fontFamily: "'Syne', sans-serif" }}>
-      <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-        <div style={{ marginBottom: 28 }}>
-          <h1 style={{ color: C.accent, fontSize: 36, fontFamily: "'Syne', sans-serif", fontWeight: 800, margin: 0, marginBottom: 4 }}>Mateo Favela</h1>
-          <p style={{ color: C.dim, fontSize: 11, fontFamily: "'Space Mono', monospace", letterSpacing: 2, textTransform: "uppercase", margin: 0 }}>GPS Performance Tracker · MLS Next SW U14</p>
-        </div>
-
-        <UnifiedACWRBanner unified={unifiedACWR} matchOnly={matchOnlyACWR} trainingOnly={trainingOnlyACWR} daysSinceMatch={daysSinceLastMatch} />
-
-        <div style={{ display: "flex", gap: 8, marginBottom: 16, borderBottom: `1px solid ${C.border}`, paddingBottom: 10 }}>
-          {[["matches", "MATCHES"], ["playoffs", "🏆 PLAYOFFS"], ["training", "TRAINING"], ["recovery", "RECOVERY"]].map(([key, label]) => (
-            <button key={key} onClick={() => setTab(key)} style={{ background: tab === key ? C.accent : "transparent", color: tab === key ? "#000" : C.dim, border: `1px solid ${tab === key ? C.accent : C.border}`, borderRadius: 6, padding: "6px 14px", fontFamily: "'Space Mono', monospace", fontSize: 10, letterSpacing: 1, textTransform: "uppercase", cursor: "pointer" }}>
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {tab === "matches" && <MatchesTab matches={data.matches} />}
-        {tab === "playoffs" && <PlayoffsTab />}
-        {tab === "training" && <TrainingTab sessions={data.training} liveFromSheet={data.liveTraining} />}
-        {tab === "recovery" && <RecoveryTab matches={data.matches} />}
-
-        <div style={{ marginTop: 40, paddingTop: 16, borderTop: `1px solid ${C.border}`, color: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace" }}>
-          <p style={{ margin: 0, marginBottom: 8 }}>Dashboard v5 · Google Sheets {data.liveMatch ? "LIVE" : "SEED"} · {new Date().toLocaleDateString("es-MX")}</p>
-        </div>
-      </div>
-    </div>
-  );
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.bg,
+      minHeight: "100vh",
+      padding: "20px 24px",
+      color: C.text,
+      fontFamily: "'Syne', sans-serif"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxWidth: 1200,
+      margin: "0 auto"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 28
+    }
+  }, /*#__PURE__*/React.createElement("h1", {
+    style: {
+      color: C.accent,
+      fontSize: 36,
+      fontFamily: "'Syne', sans-serif",
+      fontWeight: 800,
+      margin: 0,
+      marginBottom: 4
+    }
+  }, "Mateo Favela"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.dim,
+      fontSize: 11,
+      fontFamily: "'Space Mono', monospace",
+      letterSpacing: 2,
+      textTransform: "uppercase",
+      margin: 0
+    }
+  }, "GPS Performance Tracker · MLS Next SW U14")), /*#__PURE__*/React.createElement(UnifiedACWRBanner, {
+    unified: unifiedACWR,
+    matchOnly: matchOnlyACWR,
+    trainingOnly: trainingOnlyACWR,
+    daysSinceMatch: daysSinceLastMatch
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginBottom: 16,
+      borderBottom: `1px solid ${C.border}`,
+      paddingBottom: 10
+    }
+  }, [["matches", "MATCHES"], ["playoffs", "🏆 PLAYOFFS"], ["training", "TRAINING"], ["recovery", "RECOVERY"]].map(([key, label]) => /*#__PURE__*/React.createElement("button", {
+    key: key,
+    onClick: () => setTab(key),
+    style: {
+      background: tab === key ? C.accent : "transparent",
+      color: tab === key ? "#000" : C.dim,
+      border: `1px solid ${tab === key ? C.accent : C.border}`,
+      borderRadius: 6,
+      padding: "6px 14px",
+      fontFamily: "'Space Mono', monospace",
+      fontSize: 10,
+      letterSpacing: 1,
+      textTransform: "uppercase",
+      cursor: "pointer"
+    }
+  }, label))), tab === "matches" && /*#__PURE__*/React.createElement(MatchesTab, {
+    matches: data.matches
+  }), tab === "playoffs" && /*#__PURE__*/React.createElement(PlayoffsTab, null), tab === "training" && /*#__PURE__*/React.createElement(TrainingTab, {
+    sessions: data.training,
+    liveFromSheet: data.liveTraining
+  }), tab === "recovery" && /*#__PURE__*/React.createElement(RecoveryTab, {
+    matches: data.matches
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 40,
+      paddingTop: 16,
+      borderTop: `1px solid ${C.border}`,
+      color: C.dim,
+      fontSize: 9,
+      fontFamily: "'Space Mono', monospace"
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: 0,
+      marginBottom: 8
+    }
+  }, "Dashboard v5 · Google Sheets ", data.liveMatch ? "LIVE" : "SEED", " · ", new Date().toLocaleDateString("es-MX")))));
 }
-
-ReactDOM.createRoot(document.getElementById("root")).render(<Dashboard />);
+ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(Dashboard, null));
 </script>
 </body>
 </html>
