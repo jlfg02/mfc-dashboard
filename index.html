@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mateo &middot; GPS Performance Dashboard v5</title>
+  <title>Mateo &middot; GPS Performance Dashboard v6</title>
   <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
   <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
@@ -309,6 +309,18 @@ function daysBetween(a, b) {
   if (!a || !b) return null;
   return Math.round((b - a) / 86400000);
 }
+
+// ───── TEMPORADAS ──────────────────────────────────────────────────────────
+// Todo lo anterior a SEASON_START pertenece a Season 25-26 (archivo).
+// El Sheet sigue siendo un solo log: la separación se hace por fecha.
+const SEASON_START = new Date(2026, 6, 1); // 1-jul-2026
+const ACWR_CALIBRATION_DAYS = 28; // ACWR solo es accionable con >=28 días de datos continuos
+const byDate = (a, b) => (a.dateObj ? +a.dateObj : 0) - (b.dateObj ? +b.dateObj : 0);
+const isPastSeason = x => !!x.dateObj && x.dateObj < SEASON_START;
+const splitBySeason = arr => ({
+  past: arr.filter(isPastSeason).sort(byDate),
+  current: arr.filter(x => !isPastSeason(x)).sort(byDate)
+});
 function rowToMatch(row) {
   const mins = parseFloat(row["Minutes Played"]) || 0;
   const dist = parseFloat(row["Total Distance (m)"]) || 0;
@@ -436,7 +448,8 @@ function rowToTraining(row) {
 }
 
 // ACWR: fecha real — ventana deslizante de 7d aguda / 28d crónica
-function computeACWR(sessions) {
+function computeACWR(sessions, opts = {}) {
+  const firstDate = opts.calibrate ? sessions.reduce((min, x) => x.dateObj && (!min || x.dateObj < min) ? x.dateObj : min, null) : null;
   return sessions.map(s => {
     const refDate = s.dateObj || new Date();
     const msDay = 86400000;
@@ -452,10 +465,17 @@ function computeACWR(sessions) {
     });
     const acuteAvg = acute.length ? acute.reduce((a, x) => a + x.load, 0) / 7 : 0;
     const chronicAvg = chronic.length ? chronic.reduce((a, x) => a + x.load, 0) / 28 : 0;
-    const acwr = chronicAvg > 0 ? parseFloat((acuteAvg / chronicAvg).toFixed(2)) : null;
+    const acwrRaw = chronicAvg > 0 ? parseFloat((acuteAvg / chronicAvg).toFixed(2)) : null;
+    // Calibración: con <28 días desde la primera sesión, la crónica (÷28) está subestimada
+    // y el ACWR se infla artificialmente. No se muestra hasta tener la ventana completa.
+    const daysOfData = firstDate && s.dateObj ? Math.round((refDate - firstDate) / msDay) : null;
+    const calibrating = !!opts.calibrate && (daysOfData == null || daysOfData < ACWR_CALIBRATION_DAYS);
     return {
       ...s,
-      acwr,
+      acwr: calibrating ? null : acwrRaw,
+      acwrRaw,
+      calibrating,
+      daysOfData,
       acuteLoad: Math.round(acuteAvg * 7),
       chronicLoad: Math.round(chronicAvg * 28)
     };
@@ -634,7 +654,47 @@ function UnifiedACWRBanner({
   trainingOnly,
   daysSinceMatch
 }) {
-  if (!(unified !== null && unified !== void 0 && unified.acwr)) return null;
+  const infoCard = (title, big, sub, color) => /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: `linear-gradient(135deg, ${C.panel}, ${C.panel2})`,
+      border: `2px solid ${color}`,
+      borderRadius: 14,
+      padding: "18px 22px",
+      marginBottom: 20
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.dim,
+      fontSize: 9,
+      fontFamily: "'Space Mono', monospace",
+      letterSpacing: 3,
+      textTransform: "uppercase"
+    }
+  }, title), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: color,
+      fontSize: 26,
+      fontWeight: 900,
+      fontFamily: "'Syne', sans-serif",
+      lineHeight: 1.1,
+      marginTop: 4
+    }
+  }, big), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.dim,
+      fontSize: 10,
+      fontFamily: "'Space Mono', monospace",
+      marginTop: 6,
+      lineHeight: 1.5
+    }
+  }, sub));
+  if (!unified) return infoCard("ACWR · Season 26-27", "Sin sesiones registradas", "Aún no hay partidos ni entrenos de la temporada 26-27 en el Sheet (fecha ≥ 1-jul-2026). El ACWR arranca desde cero con la primera sesión.", C.dim);
+  if (unified.calibrating) {
+    const d = Math.max(0, unified.daysOfData ?? 0);
+    const pct = Math.min(100, Math.round(d / ACWR_CALIBRATION_DAYS * 100));
+    return infoCard("ACWR · Season 26-27 · CALIBRANDO", `Día ${d} de ${ACWR_CALIBRATION_DAYS}`, `Con menos de 28 días de datos la carga crónica está subestimada y el ACWR sale inflado (falsos positivos de sobrecarga), por eso no se muestra todavía. Sesiones registradas hasta ahora: carga aguda 7d = ${unified.acuteLoad} UA · crónica = ${unified.chronicLoad} UA. Progreso de calibración: ${pct}%.`, C.accent);
+  }
+  if (!unified.acwr) return null;
   const col = acwrColor(unified.acwr);
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -752,8 +812,15 @@ function UnifiedACWRBanner({
   }, trainingOnly !== null && trainingOnly !== void 0 ? trainingOnly : "—"))));
 }
 function MatchesTab({
-  matches
+  matches,
+  calibrate = false,
+  archived = false,
+  loading = false,
+  emptyText = "Sin partidos registrados todavía"
 }) {
+  const withACWR = useMemo(() => computeACWR(matches || [], {
+    calibrate
+  }), [matches, calibrate]);
   if (!(matches !== null && matches !== void 0 && matches.length)) return /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
@@ -762,16 +829,15 @@ function MatchesTab({
       fontFamily: "'Space Mono', monospace",
       fontSize: 12
     }
-  }, "Cargando datos desde Google Sheets...", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("span", {
+  }, loading ? "Cargando datos desde Google Sheets..." : emptyText, /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("span", {
     style: {
       color: C.accent
     }
-  }, "Un momento"));
+  }, loading ? "Un momento" : "Pega el primer partido en MATCH_LOG (fecha ≥ 1-jul-2026) y aparece aquí"));
   const avg = key => {
     const v = matches.map(m => m[key]).filter(x => x != null && x > 0);
     return v.length ? +(v.reduce((a, b) => a + b, 0) / v.length).toFixed(2) : null;
   };
-  const withACWR = useMemo(() => computeACWR(matches), [matches]);
   const latest = withACWR[withACWR.length - 1];
   const hasHR = matches.some(m => m.z1 > 0 || m.z2 > 0);
   const hasAccel = matches.some(m => m.accel > 0 || m.decel > 0);
@@ -781,7 +847,7 @@ function MatchesTab({
     expected: m.expHID,
     ratio: m.loadRatio
   }));
-  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(AlertBar, {
+  return /*#__PURE__*/React.createElement("div", null, !archived && /*#__PURE__*/React.createElement(AlertBar, {
     acwr: latest === null || latest === void 0 ? void 0 : latest.acwr,
     loadRatio: latest === null || latest === void 0 ? void 0 : latest.loadRatio,
     scope: "Partidos"
@@ -1627,13 +1693,17 @@ function TrainingLineGenerator() {
 }
 function TrainingTab({
   sessions,
-  liveFromSheet
+  liveFromSheet,
+  calibrate = false,
+  archived = false
 }) {
-  const withACWR = useMemo(() => computeACWR(sessions), [sessions]);
+  const withACWR = useMemo(() => computeACWR(sessions, {
+    calibrate
+  }), [sessions, calibrate]);
   const latest = withACWR[withACWR.length - 1];
   const avg = arr => arr.filter(Boolean).length ? +(arr.filter(Boolean).reduce((a, b) => a + b, 0) / arr.filter(Boolean).length).toFixed(2) : null;
   const totalLoad = sessions.reduce((a, s) => a + s.load, 0);
-  if (!sessions.length) return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(TrainingLineGenerator, null), /*#__PURE__*/React.createElement("div", {
+  if (!sessions.length) return /*#__PURE__*/React.createElement("div", null, !archived && /*#__PURE__*/React.createElement(TrainingLineGenerator, null), /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "60px 0",
@@ -1646,7 +1716,7 @@ function TrainingTab({
       color: C.accent
     }
   }, "Genera la primera línea arriba y pégala al Sheet")));
-  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(TrainingLineGenerator, null), !liveFromSheet && /*#__PURE__*/React.createElement("div", {
+  return /*#__PURE__*/React.createElement("div", null, !archived && /*#__PURE__*/React.createElement(TrainingLineGenerator, null), !archived && !liveFromSheet && /*#__PURE__*/React.createElement("div", {
     style: {
       background: C.amber + "15",
       border: `1px solid ${C.amber}55`,
@@ -1657,7 +1727,7 @@ function TrainingTab({
       fontFamily: "'Space Mono', monospace",
       fontSize: 10
     }
-  }, "⚠ Training data viene del SEED embebido. Para leer en vivo desde WEEKPRACTICE_LOG, configurar TRAINING_GID en index.html."), /*#__PURE__*/React.createElement(AlertBar, {
+  }, "⚠ Training data viene del SEED embebido. Para leer en vivo desde WEEKPRACTICE_LOG, configurar TRAINING_GID en index.html."), !archived && /*#__PURE__*/React.createElement(AlertBar, {
     acwr: latest === null || latest === void 0 ? void 0 : latest.acwr,
     scope: "Training"
   }), /*#__PURE__*/React.createElement("div", {
@@ -3411,13 +3481,138 @@ function DinnerBlock() {
   });
 }
 
+// ───── SEASON 25-26 · ARCHIVO ─────────────────────────────────────────────
+function SeasonArchiveTab({
+  matches,
+  training,
+  liveTraining
+}) {
+  const [sub, setSub] = useState("matches");
+  const all = useMemo(() => [...matches, ...training].sort(byDate), [matches, training]);
+  const stats = useMemo(() => {
+    const w = computeACWR(all, {
+      calibrate: true
+    }); // ignora ACWR de las primeras 4 semanas (ventana crónica incompleta)
+    const valid = w.filter(x => x.acwr != null);
+    const peak = valid.reduce((m, x) => !m || x.acwr > m.acwr ? x : m, null);
+    return {
+      first: all[0],
+      last: all[all.length - 1],
+      peak,
+      final: w[w.length - 1]
+    };
+  }, [all]);
+  const fmt = d => d ? d.toLocaleDateString("es-MX", {
+    day: "numeric",
+    month: "short",
+    year: "numeric"
+  }) : "—";
+  const subs = [["matches","MATCHES"], ["playoffs","🏆 PLAYOFFS"], ["training","TRAINING"], ["recovery","RECOVERY"]];
+  const cell = (label, value, color) => /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.bg,
+      border: `1px solid ${C.border}`,
+      borderRadius: 8,
+      padding: "8px 12px",
+      minWidth: 110
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.dim,
+      fontSize: 8,
+      fontFamily: "'Space Mono', monospace",
+      letterSpacing: 2,
+      textTransform: "uppercase"
+    }
+  }, label), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: color || C.text,
+      fontSize: 16,
+      fontWeight: 700,
+      fontFamily: "'Syne', sans-serif"
+    }
+  }, value));
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: `linear-gradient(135deg, ${C.panel}, ${C.panel2})`,
+      border: `1px solid ${C.border}`,
+      borderRadius: 14,
+      padding: "16px 20px",
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.dim,
+      fontSize: 9,
+      fontFamily: "'Space Mono', monospace",
+      letterSpacing: 3,
+      textTransform: "uppercase"
+    }
+  }, "📦 Archivo · Temporada cerrada · Chula Vista FC · MLS Next SW U14"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.text,
+      fontSize: 22,
+      fontWeight: 800,
+      fontFamily: "'Syne', sans-serif",
+      marginTop: 4
+    }
+  }, "Season 25-26"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: C.dim,
+      fontSize: 10,
+      fontFamily: "'Space Mono', monospace",
+      margin: "6px 0 12px",
+      lineHeight: 1.5
+    }
+  }, "Histórico de solo lectura (", fmt(stats.first === null || stats.first === void 0 ? void 0 : stats.first.dateObj), " → ", fmt(stats.last === null || stats.last === void 0 ? void 0 : stats.last.dateObj), "). Los valores de ACWR son del momento en que ocurrieron y ", /*#__PURE__*/React.createElement("b", null, "no generan alertas"), ". El ACWR vigente está en las tabs principales (Season 26-27)."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      flexWrap: "wrap"
+    }
+  }, cell("Partidos", matches.length, C.accent), cell("Entrenos GPS", training.length, C.accent), cell("ACWR cierre (hist.)", stats.final && stats.final.acwr != null ? stats.final.acwr : "—"), cell("ACWR pico (hist.)", stats.peak ? `${stats.peak.acwr} · ${stats.peak.date}` : "—"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginBottom: 16,
+      flexWrap: "wrap"
+    }
+  }, subs.map(([key, label]) => /*#__PURE__*/React.createElement("button", {
+    key: key,
+    onClick: () => setSub(key),
+    style: {
+      background: sub === key ? C.blue : "transparent",
+      color: sub === key ? "#000" : C.dim,
+      border: `1px solid ${sub === key ? C.blue : C.border}`,
+      borderRadius: 6,
+      padding: "5px 12px",
+      fontFamily: "'Space Mono', monospace",
+      fontSize: 10,
+      letterSpacing: 1,
+      textTransform: "uppercase",
+      cursor: "pointer"
+    }
+  }, label))), sub === "matches" && /*#__PURE__*/React.createElement(MatchesTab, {
+    matches: matches,
+    archived: true,
+    emptyText: "Sin partidos en Season 25-26"
+  }), sub === "playoffs" && /*#__PURE__*/React.createElement(PlayoffsTab, null), sub === "training" && /*#__PURE__*/React.createElement(TrainingTab, {
+    sessions: training,
+    liveFromSheet: liveTraining,
+    archived: true
+  }), sub === "recovery" && /*#__PURE__*/React.createElement(RecoveryTab, {
+    matches: matches
+  }));
+}
+
 // ───── DASHBOARD COMPONENT & ROOT RENDER ───────────────────────────────────
 function Dashboard() {
   const [data, setData] = useState({
     matches: [],
     training: [],
     liveMatch: false,
-    liveTraining: false
+    liveTraining: false,
+    loaded: false
   });
   const [tab, setTab] = useState("matches");
   useEffect(() => {
@@ -3430,45 +3625,56 @@ function Dashboard() {
         const trainingText = await trainingRes.text();
         const trainingRows = parseCSV(trainingText).map(rowToTraining).filter(t => t.rawDate);
         setData({
-          matches: matchRows.length ? matchRows : MATCH_SEED,
+          matches: matchRows.length ? matchRows : MATCH_SEED.map(rowToMatch),
           training: trainingRows.length ? trainingRows : TRAINING_SEED,
           liveMatch: matchRows.length > 0,
-          liveTraining: trainingRows.length > 0
+          liveTraining: trainingRows.length > 0,
+          loaded: true
         });
       } catch {
         setData({
-          matches: MATCH_SEED,
+          matches: MATCH_SEED.map(rowToMatch),
           training: TRAINING_SEED,
           liveMatch: false,
-          liveTraining: false
+          liveTraining: false,
+          loaded: true
         });
       }
     };
     tryFetch();
   }, []);
-  const allSessions = useMemo(() => [...data.matches, ...data.training], [data]);
+  // Season 26-27 = vigente (tabs principales, ACWR en calibración). Season 25-26 = archivo.
+  const seasonMatches = useMemo(() => splitBySeason(data.matches), [data.matches]);
+  const seasonTraining = useMemo(() => splitBySeason(data.training), [data.training]);
+  const curMatches = seasonMatches.current;
+  const curTraining = seasonTraining.current;
+  const allSessions = useMemo(() => [...curMatches, ...curTraining].sort(byDate), [curMatches, curTraining]);
   const unifiedACWR = useMemo(() => {
     if (!allSessions.length) return null;
-    const withACWR = computeACWR(allSessions);
+    const withACWR = computeACWR(allSessions, {
+      calibrate: true
+    });
     return withACWR[withACWR.length - 1];
   }, [allSessions]);
   const matchOnlyACWR = useMemo(() => {
-    var _withACWR;
-    if (!data.matches.length) return null;
-    const withACWR = computeACWR(data.matches);
-    return (_withACWR = withACWR[withACWR.length - 1]) === null || _withACWR === void 0 ? void 0 : _withACWR.acwr;
-  }, [data.matches]);
+    if (!curMatches.length) return null;
+    const withACWR = computeACWR(curMatches, {
+      calibrate: true
+    });
+    return withACWR[withACWR.length - 1]?.acwr ?? null;
+  }, [curMatches]);
   const trainingOnlyACWR = useMemo(() => {
-    var _withACWR2;
-    if (!data.training.length) return null;
-    const withACWR = computeACWR(data.training);
-    return (_withACWR2 = withACWR[withACWR.length - 1]) === null || _withACWR2 === void 0 ? void 0 : _withACWR2.acwr;
-  }, [data.training]);
+    if (!curTraining.length) return null;
+    const withACWR = computeACWR(curTraining, {
+      calibrate: true
+    });
+    return withACWR[withACWR.length - 1]?.acwr ?? null;
+  }, [curTraining]);
   const daysSinceLastMatch = useMemo(() => {
-    if (!data.matches.length) return null;
-    const lastMatch = data.matches[data.matches.length - 1];
+    if (!curMatches.length) return null;
+    const lastMatch = curMatches[curMatches.length - 1];
     return daysBetween(lastMatch.dateObj, new Date());
-  }, [data.matches]);
+  }, [curMatches]);
   return /*#__PURE__*/React.createElement("div", {
     style: {
       background: C.bg,
@@ -3504,7 +3710,7 @@ function Dashboard() {
       textTransform: "uppercase",
       margin: 0
     }
-  }, "GPS Performance Tracker · MLS Next SW U14")), /*#__PURE__*/React.createElement(UnifiedACWRBanner, {
+  }, "GPS Performance Tracker · Season 26-27 · EFMO Boadilla Cadete A")), /*#__PURE__*/React.createElement(UnifiedACWRBanner, {
     unified: unifiedACWR,
     matchOnly: matchOnlyACWR,
     trainingOnly: trainingOnlyACWR,
@@ -3513,11 +3719,12 @@ function Dashboard() {
     style: {
       display: "flex",
       gap: 8,
+      flexWrap: "wrap",
       marginBottom: 16,
       borderBottom: `1px solid ${C.border}`,
       paddingBottom: 10
     }
-  }, [["matches", "MATCHES"], ["playoffs", "🏆 PLAYOFFS"], ["training", "TRAINING"], ["recovery", "RECOVERY"]].map(([key, label]) => /*#__PURE__*/React.createElement("button", {
+  }, [["matches", "MATCHES 26-27"], ["training", "TRAINING 26-27"], ["season2526", "📦 SEASON 25-26"]].map(([key, label]) => /*#__PURE__*/React.createElement("button", {
     key: key,
     onClick: () => setTab(key),
     style: {
@@ -3533,12 +3740,18 @@ function Dashboard() {
       cursor: "pointer"
     }
   }, label))), tab === "matches" && /*#__PURE__*/React.createElement(MatchesTab, {
-    matches: data.matches
-  }), tab === "playoffs" && /*#__PURE__*/React.createElement(PlayoffsTab, null), tab === "training" && /*#__PURE__*/React.createElement(TrainingTab, {
-    sessions: data.training,
-    liveFromSheet: data.liveTraining
-  }), tab === "recovery" && /*#__PURE__*/React.createElement(RecoveryTab, {
-    matches: data.matches
+    matches: curMatches,
+    calibrate: true,
+    loading: !data.loaded,
+    emptyText: "Season 26-27: sin partidos registrados todavía"
+  }), tab === "training" && /*#__PURE__*/React.createElement(TrainingTab, {
+    sessions: curTraining,
+    liveFromSheet: data.liveTraining,
+    calibrate: true
+  }), tab === "season2526" && /*#__PURE__*/React.createElement(SeasonArchiveTab, {
+    matches: seasonMatches.past,
+    training: seasonTraining.past,
+    liveTraining: data.liveTraining
   }), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 40,
@@ -3553,7 +3766,7 @@ function Dashboard() {
       margin: 0,
       marginBottom: 8
     }
-  }, "Dashboard v5 · Google Sheets ", data.liveMatch ? "LIVE" : "SEED", " · ", new Date().toLocaleDateString("es-MX")))));
+  }, "Dashboard v6 · Season 26-27 · Google Sheets ", data.liveMatch ? "LIVE" : "SEED", " · ", new Date().toLocaleDateString("es-MX")))));
 }
 ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(Dashboard, null));
 </script>
