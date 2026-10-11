@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mateo &middot; GPS Performance Dashboard v6.3</title>
+  <title>Mateo &middot; GPS Performance Dashboard v6.4</title>
   <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
   <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
@@ -3778,6 +3778,217 @@ function ZonePitch({
     strokeWidth: 1.5
   }));
 }
+// ───── RECOMENDACIONES — convierte los datos en acciones (reglas simples y auditables) ─────
+const RECS_LEVEL = {
+  ok: ["#22d47a", "✅"],
+  warn: ["#f5a623", "⚠️"],
+  alert: ["#f04040", "🚨"],
+  info: ["#00e5ff", "ℹ️"]
+};
+function median(arr) {
+  const s = arr.filter(x => typeof x === "number" && isFinite(x) && x > 0).sort((a, b) => a - b);
+  if (!s.length) return null;
+  const k = Math.floor(s.length / 2);
+  return s.length % 2 ? s[k] : (s[k - 1] + s[k]) / 2;
+}
+function zonesOf(item) {
+  if (!item || !item.halves || !item.halves.length) return null;
+  const use = item.halves.filter(hf => !(item.trendExclude || []).includes(hf.half));
+  const wsum = use.reduce((a, hf) => a + (hf.minutes || 1), 0) || 1;
+  const avg = k => Math.round(use.reduce((a, hf) => a + (hf[k] || 0) * (hf.minutes || 1), 0) / wsum);
+  return {
+    def: avg("def"),
+    mid: avg("mid"),
+    att: avg("att"),
+    halves: item.halves
+  };
+}
+function buildRecs(ms, unified, heat) {
+  const out = {
+    rend: [],
+    tact: [],
+    cuerpo: [],
+    esf: [],
+    coach: "",
+    pend: []
+  };
+  if (!ms || !ms.length) return out;
+  const last = ms[ms.length - 1];
+  const prev = ms.slice(0, -1);
+  const add = (k, level, text) => out[k].push({
+    level,
+    text
+  });
+  const fmt = (x, d = 1) => typeof x === "number" ? x.toFixed(d) : "—";
+
+  // ── RENDIMIENTO
+  if (last.loadRatio != null) {
+    const lr = last.loadRatio;
+    const msg = `Carga vs esperado: ${fmt(lr, 2)} (HID ${last.hid} m de ${last.expHID} m esperados).`;
+    if (lr < 0.75) add("rend", "warn", msg + " Por debajo de lo esperado: revisa rol táctico, minutos o ritmo del partido.");else if (lr <= 1.15) add("rend", "ok", msg + " Rango óptimo.");else if (lr <= 1.35) add("rend", "warn", msg + " Alto: vigila la recuperación de las próximas 48 h.");else add("rend", "alert", msg + " Exceso: prioriza recuperación y evita sumar carga extra esta semana.");
+  }
+  const baseHid = median(prev.map(m => m.hidMin));
+  if (baseHid && last.hidMin) {
+    const d = last.hidMin / baseHid - 1;
+    if (d > 0.08) add("rend", "ok", `HID/min ${fmt(last.hidMin)} (+${Math.round(d * 100)}% vs sus partidos previos): sube el ritmo.`);else if (d < -0.08) add("rend", "warn", `HID/min ${fmt(last.hidMin)} (${Math.round(d * 100)}% vs sus partidos previos): baja el ritmo; revisa descanso, sueño y rol en el partido.`);else add("rend", "ok", `HID/min ${fmt(last.hidMin)}: estable frente a sus partidos previos (${fmt(baseHid)}).`);
+  }
+  const spm = last.mins > 0 ? last.sprintCount / last.mins : 0;
+  const spBase = median(prev.map(m => m.mins > 0 ? m.sprintCount / m.mins : 0));
+  if (spm && spBase) {
+    const d = spm / spBase - 1;
+    if (d < -0.2) add("rend", "warn", `Sprints por minuto ${fmt(spm, 2)} (${Math.round(d * 100)}%): menos explosividad que de costumbre.`);else if (d > 0.2) add("rend", "ok", `Sprints por minuto ${fmt(spm, 2)} (+${Math.round(d * 100)}%): más explosividad que de costumbre.`);
+  }
+  if (last.mins >= 75 && baseHid && last.hidMin >= baseHid * 0.95) add("rend", "ok", `Sostuvo el ritmo en ${last.mins} min: buena base física para partido completo.`);
+
+  // ── CUIDADO DEL CUERPO
+  if (last.accel > 0 && last.decel > 0) {
+    const ratio = last.decel / last.accel;
+    const dpm = last.decel / last.mins;
+    const dBase = median(prev.map(m => m.mins > 0 && m.decel > 0 ? m.decel / m.mins : 0));
+    if (ratio > 1.08) add("cuerpo", "warn", `Más frenadas que arranques (${last.decel}/${last.accel}): carga excéntrica. Priorizar isquios, aductores y frenado de tobillo.`);
+    if (dBase && dpm / dBase > 1.15) add("cuerpo", "warn", `Frenadas por minuto ${fmt(dpm, 2)} (+${Math.round((dpm / dBase - 1) * 100)}% vs sus partidos previos): sube el trabajo excéntrico y revisa el calzado/superficie.`);
+  }
+  const zsum = last.z1 + last.z2 + last.z3 + last.z4 + last.z5;
+  if (zsum > 0) {
+    const hi = (last.z4 + last.z5) / zsum;
+    if (hi >= 0.9) add("cuerpo", "info", `${Math.round(hi * 100)}% del tiempo en zonas de FC 4-5: alta demanda cardiovascular. Cuida sueño, hidratación y comida de recuperación.`);
+  }
+  if (last.rpe >= 8 || last.loadRatio != null && last.loadRatio > 1.15) add("cuerpo", "info", "Partido de carga alta: 24-48 h de recuperación activa (movilidad, sueño, hidratación) antes de volver a trabajo intenso.");
+  if (unified && unified.calibrating) add("cuerpo", "info", `ACWR en calibración (día ${unified.daysOfData} de 28): no lo uses para decidir carga todavía.`);else if (unified && unified.acwr != null) {
+    const a = unified.acwr;
+    if (a > 1.5) add("cuerpo", "alert", `ACWR ${a}: zona de sobrecarga. Reduce volumen o intensidad esta semana.`);else if (a > 1.3) add("cuerpo", "warn", `ACWR ${a}: precaución. No subas más la carga.`);else if (a < 0.8) add("cuerpo", "info", `ACWR ${a}: carga baja; hay margen para subir.`);else add("cuerpo", "ok", `ACWR ${a}: zona óptima.`);
+  }
+
+  // ── ESFUERZO (percibido vs objetivo)
+  if (last.rpe) {
+    const rBase = median(prev.map(m => m.rpe));
+    if (last.loadRatio != null && last.rpe >= 8 && last.loadRatio < 0.9) add("esf", "warn", `RPE ${last.rpe} con carga objetiva baja (${fmt(last.loadRatio, 2)}): lo sintió más duro de lo que midió el GPS. Posible fatiga acumulada o falta de recuperación.`);else if (last.loadRatio != null && last.rpe <= 6 && last.loadRatio > 1.15) add("esf", "info", `RPE ${last.rpe} con carga objetiva alta (${fmt(last.loadRatio, 2)}): quizá subestima su esfuerzo; conviene preguntarle cómo se sintió.`);else add("esf", "ok", `RPE ${last.rpe} coherente con la carga medida: percibe el esfuerzo igual que el GPS.`);
+    if (rBase && last.rpe >= rBase + 1.5) add("esf", "warn", `RPE sube ${fmt(last.rpe - rBase)} puntos vs su promedio (${fmt(rBase)}): vigila el cansancio.`);
+  }
+
+  // ── TÁCTICO (mapas de calor)
+  const z = zonesOf(heat && heat.length ? heat[heat.length - 1] : null);
+  if (z) {
+    if (z.att > 30) add("tact", "warn", `${z.att}% del tiempo en zona alta (def ${z.def}% · medio ${z.mid}% · ataque ${z.att}%): sube mucho para un 6. Cuidar la disciplina posicional.`);else if (z.def < 15) add("tact", "warn", `Solo ${z.def}% del tiempo en zona baja: puede estar dejando espacio a su espalda. Cuidar coberturas.`);else if (z.mid >= 55) add("tact", "ok", `Zona media dominante (${z.mid}%): perfil de 6 / 8 coherente.`);else add("tact", "ok", `Reparto por zonas: def ${z.def}% · medio ${z.mid}% · ataque ${z.att}%.`);
+    const hi1 = z.halves.find(hf => hf.att > 30 && z.att <= 30);
+    if (hi1) add("tact", "info", `En el ${hi1.half}T pasó ${hi1.att}% en zona alta: ojo con subir demasiado al inicio.`);
+    if (z.halves.length === 2 && Math.abs(z.halves[0].att - z.halves[1].att) >= 10) add("tact", "info", `Su posición cambió entre tiempos: ataque ${z.halves[0].att}% → ${z.halves[1].att}% (1T → 2T).`);
+  } else add("tact", "info", "Sin mapa de calor para el último partido.");
+
+  // ── PENDIENTES / MONITOREO
+  const spain = ms.map(m => m.hidMin);
+  const med = median(spain);
+  if (med) add("pend", Math.abs(med - SPAIN_XHID_PER_MIN) > 1.5 ? "warn" : "info", `Monitoreo de la base de España: mediana real ${fmt(med)} HID/min en ${spain.length} partidos vs base ${SPAIN_XHID_PER_MIN}. ${Math.abs(med - SPAIN_XHID_PER_MIN) > 1.5 ? "Se separa más de 1.5: conviene recalibrar." : "Dentro de margen; seguir con 21.5."}`);
+  if (unified && unified.calibrating) add("pend", "info", "Registrar el RPE de cada entrenamiento (martes, jueves, viernes y sesiones de fuerza) para que el ACWR sea confiable.");
+
+  // ── PARA EL ENTRENADOR (texto listo para copiar)
+  const level = last.loadRatio == null ? "sin dato" : last.loadRatio > 1.35 ? "excesivo" : last.loadRatio > 1.15 ? "alto" : last.loadRatio < 0.75 ? "bajo" : "dentro de lo esperado";
+  out.coach = `Mateo — ${last.opponent || "partido"} (${last.date}): ${last.mins} min, ${Math.round(last.totalDist)} m, HID ${last.hid} m (${fmt(last.hidMin)} m/min), ${last.sprintCount > 0 ? last.sprintCount + " sprints, " : ""}RPE ${last.rpe}. Carga ${level} para su nivel` + (z ? `; reparto por zonas: def ${z.def}% · medio ${z.mid}% · ataque ${z.att}%.` : ".");
+  return out;
+}
+function RecsPanel({
+  matches,
+  unified
+}) {
+  const h = React.createElement;
+  const [heat, setHeat] = useState([]);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    fetch(HEATMAP_URL + "?cb=" + Date.now()).then(r => r.ok ? r.json() : []).then(d => setHeat(Array.isArray(d) ? d.slice().sort((a, b) => a.date < b.date ? -1 : 1) : [])).catch(() => setHeat([]));
+  }, []);
+  const recs = useMemo(() => buildRecs(matches, unified, heat), [matches, unified, heat]);
+  if (!matches || !matches.length) return null;
+  const last = matches[matches.length - 1];
+  const cats = [["rend", "📈 RENDIMIENTO"], ["tact", "🧭 TÁCTICO"], ["cuerpo", "🩹 CUIDADO DEL CUERPO"], ["esf", "💪 ESFUERZO"], ["pend", "📌 PENDIENTES Y MONITOREO"]];
+  const copy = () => {
+    try {
+      navigator.clipboard.writeText(recs.coach).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      });
+    } catch (e) {}
+  };
+  return h("div", {
+    style: {
+      marginBottom: 24
+    }
+  }, h(ST, null, `QUÉ HACER ESTA SEMANA — según ${last.opponent || "último partido"} (${last.date})`), h("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+      gap: 12
+    }
+  }, cats.map(([k, title]) => recs[k].length ? h("div", {
+    key: k,
+    style: {
+      background: C.panel,
+      border: `1px solid ${C.border}`,
+      borderRadius: 10,
+      padding: "12px 14px"
+    }
+  }, h("div", {
+    style: {
+      fontFamily: "'Space Mono', monospace",
+      fontSize: 10,
+      letterSpacing: 1.5,
+      color: C.accent,
+      marginBottom: 8
+    }
+  }, title), recs[k].map((r, i) => h("p", {
+    key: i,
+    style: {
+      margin: "0 0 8px",
+      fontSize: 12.5,
+      lineHeight: 1.45,
+      color: C.text,
+      borderLeft: `3px solid ${RECS_LEVEL[r.level][0]}`,
+      paddingLeft: 8
+    }
+  }, RECS_LEVEL[r.level][1] + " " + r.text))) : null), h("div", {
+    style: {
+      background: C.panel,
+      border: `1px solid ${C.border}`,
+      borderRadius: 10,
+      padding: "12px 14px"
+    }
+  }, h("div", {
+    style: {
+      fontFamily: "'Space Mono', monospace",
+      fontSize: 10,
+      letterSpacing: 1.5,
+      color: C.accent,
+      marginBottom: 8
+    }
+  }, "🧑‍🏫 PARA EL ENTRENADOR (texto para copiar)"), h("p", {
+    style: {
+      margin: "0 0 10px",
+      fontSize: 12.5,
+      lineHeight: 1.45,
+      color: C.text
+    }
+  }, recs.coach), h("button", {
+    onClick: copy,
+    style: {
+      background: copied ? C.green : "transparent",
+      color: copied ? "#000" : C.accent,
+      border: `1px solid ${copied ? C.green : C.accent}`,
+      borderRadius: 6,
+      padding: "5px 12px",
+      fontFamily: "'Space Mono', monospace",
+      fontSize: 10,
+      letterSpacing: 1,
+      cursor: "pointer"
+    }
+  }, copied ? "COPIADO ✓" : "COPIAR"))), h("p", {
+    style: {
+      margin: "10px 0 0",
+      color: C.dim,
+      fontSize: 9,
+      fontFamily: "'Space Mono', monospace"
+    }
+  }, "Reglas automáticas sobre los datos de GPS, RPE y mapas de calor. Orientan; no sustituyen el criterio del cuerpo técnico."));
+}
+
 function HeatmapSection() {
   const h = React.createElement;
   const [items, setItems] = useState(null);
@@ -4103,7 +4314,10 @@ function Dashboard() {
       textTransform: "uppercase",
       cursor: "pointer"
     }
-  }, label))), tab === "matches" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(MatchesTab, {
+  }, label))), tab === "matches" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(RecsPanel, {
+    matches: curMatches,
+    unified: unifiedACWR
+  }), /*#__PURE__*/React.createElement(MatchesTab, {
     matches: curMatches,
     calibrate: true,
     loading: !data.loaded,
@@ -4130,7 +4344,7 @@ function Dashboard() {
       margin: 0,
       marginBottom: 8
     }
-  }, "Dashboard v6.3 · Season 26-27 · Google Sheets ", data.liveMatch ? "LIVE" : "SEED", " · ", new Date().toLocaleDateString("es-MX")))));
+  }, "Dashboard v6.4 · Season 26-27 · Google Sheets ", data.liveMatch ? "LIVE" : "SEED", " · ", new Date().toLocaleDateString("es-MX")))));
 }
 ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(Dashboard, null));
 </script>
