@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mateo &middot; GPS Performance Dashboard v6.1</title>
+  <title>Mateo &middot; GPS Performance Dashboard v6.3</title>
   <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
   <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
@@ -139,6 +139,9 @@ const EXPECTED_HID_PER_MIN = {
   "3": 13.0,
   "4": 12.0
 };
+// Season 26-27 (España): todo rival se evalúa como T1. Base recalibrada con los 3 primeros partidos
+// (HID/min 21.55, 22.78, 21.43; mediana 21.55 -> 21.5). Recalibrar cada ~10 partidos.
+const SPAIN_XHID_PER_MIN = 21.5;
 const TIER_TEXT_MAP = {
   "elite": "1",
   "t1": "1",
@@ -332,14 +335,14 @@ function rowToMatch(row) {
   const rpe = !isNaN(rpeRaw) && rpeRaw > 0 ? rpeRaw : workRate > 0 ? Math.min(10, Math.round(workRate / 10)) : 6;
   const load = Math.round(mins * rpe);
   // Season 26-27 (España): el objetivo es sostener nivel T1 sin importar el rival -> todo partido
-  // se evalúa contra el esperado T1 (provisional 17.0; se recalibra con los primeros 3 partidos).
+  // se evalúa contra el esperado T1 (base recalibrada 21.5 HID/min con los primeros 3 partidos).
   const spainSeason = (() => {
     const d = parseDate(row["Date"]);
     return !!d && d >= SEASON_START;
   })();
   const tier = spainSeason ? "1" : row["Opponent Tier"] || "2";
   const mdi = getMDI(tier);
-  const expHID = getExpectedHID(tier, mins);
+  const expHID = spainSeason ? mins > 0 ? Math.round(SPAIN_XHID_PER_MIN * mins) : null : getExpectedHID(tier, mins);
   const loadRatio = expHID > 0 ? parseFloat((hid / expHID).toFixed(2)) : null;
   const rawDate = row["Date"] || "";
   const dateObj = parseDate(rawDate);
@@ -960,7 +963,7 @@ function MatchesTab({
       fontFamily: "'Space Mono', monospace",
       marginBottom: 12
     }
-  }, "Expected = mins × HID/min (Mateo avg) · T1 Elite: 17.0 · T2 Strong: 15.0 · T3 Medium: 13.0 · T4 Low: 12.0 m/min"), /*#__PURE__*/React.createElement(ResponsiveContainer, {
+  }, "Expected = mins × HID/min (Mateo avg) · T1 Elite: 17.0 · T2 Strong: 15.0 · T3 Medium: 13.0 · T4 Low: 12.0 m/min · España 26-27 (todos T1): 21.5 m/min"), /*#__PURE__*/React.createElement(ResponsiveContainer, {
     width: "100%",
     height: 200
   }, /*#__PURE__*/React.createElement(ComposedChart, {
@@ -2292,7 +2295,88 @@ const MATCH_SEED = [{
   "Position": "CM",
   "Goals": "1",
   "Assists": "0"
-}];
+}, {
+  "Date": "2026-09-13",
+  "Opponent": "Amistoso (rival no identificado)",
+  "Opponent Tier": "1",
+  "Minutes Played": "64",
+  "Total Distance (m)": "6496",
+  "Intensity (m/min)": "101.5",
+  "HID (m)": "1379",
+  "Work Rate (%)": "85",
+  "Sprint Distance (m)": "750",
+  "HSR (m)": "362",
+  "Sprints (#)": "44",
+  "Accelerations (#)": "67",
+  "Decelerations (#)": "72",
+  "Max Speed (m/s)": "7.36",
+  "RPE (1-10)": "8",
+  "Result": "W 2-1",
+  "Position": "CM",
+  "Goals": "0",
+  "Assists": "0",
+  "Z1": "8",
+  "Z2": "11",
+  "Z3": "9",
+  "Z4": "9",
+  "Z5": "45",
+  "Max HR": "203",
+  "Avg HR": "194"
+}, {
+  "Date": "2026-09-19",
+  "Opponent": "Unión Carrascal",
+  "Opponent Tier": "1",
+  "Minutes Played": "60",
+  "Total Distance (m)": "6435",
+  "Intensity (m/min)": "107.25",
+  "HID (m)": "1367",
+  "Work Rate (%)": "82",
+  "Sprint Distance (m)": "755",
+  "HSR (m)": "377",
+  "Sprints (#)": "39",
+  "Accelerations (#)": "59",
+  "Decelerations (#)": "62",
+  "Max Speed (m/s)": "7.35",
+  "RPE (1-10)": "7.5",
+  "Result": "W 2-1",
+  "Position": "CM",
+  "Goals": "0",
+  "Assists": "0",
+  "Z1": "24",
+  "Z2": "2",
+  "Z3": "2",
+  "Z4": "19",
+  "Z5": "35",
+  "Max HR": "195",
+  "Avg HR": "190"
+}, {
+  "Date": "2026-10-10",
+  "Opponent": "CD DV7 Madrid A",
+  "Opponent Tier": "1",
+  "Minutes Played": "80",
+  "Total Distance (m)": "8958",
+  "Intensity (m/min)": "111.98",
+  "HID (m)": "1714",
+  "Work Rate (%)": "83",
+  "Sprint Distance (m)": "701",
+  "HSR (m)": "235",
+  "Sprints (#)": "53",
+  "Accelerations (#)": "87",
+  "Decelerations (#)": "95",
+  "Max Speed (m/s)": "7.43",
+  "RPE (1-10)": "8",
+  "Result": "W 2-1",
+  "Position": "CM",
+  "Goals": "0",
+  "Assists": "0",
+  "Z1": "0",
+  "Z2": "0",
+  "Z3": "6",
+  "Z4": "34",
+  "Z5": "48",
+  "Max HR": "192",
+  "Avg HR": "184"
+} ];
 
 // ───── MLS NEXT CUP PLAYOFFS DATA (Salt Lake City, 1300m altitude) ────────
 const MLS_CUP_DATA = [{
@@ -4046,7 +4130,7 @@ function Dashboard() {
       margin: 0,
       marginBottom: 8
     }
-  }, "Dashboard v6.1 · Season 26-27 · Google Sheets ", data.liveMatch ? "LIVE" : "SEED", " · ", new Date().toLocaleDateString("es-MX")))));
+  }, "Dashboard v6.3 · Season 26-27 · Google Sheets ", data.liveMatch ? "LIVE" : "SEED", " · ", new Date().toLocaleDateString("es-MX")))));
 }
 ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(Dashboard, null));
 </script>

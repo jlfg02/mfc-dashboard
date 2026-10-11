@@ -1,29 +1,81 @@
 [
-  {
-    "date": "2026-09-13",
-    "label": "Amistoso",
-    "kind": "Amistoso",
-    "minutesPlayed": 64,
-    "note": "Entró tras ~16 min en banca/calentando. La 1ª mitad se calculó sin la franja roja de la banda izquierda (banca) y ambas mitades pesan por minutos jugados.",
-    "halves": [
-      {
-        "half": 1,
-        "def": 7,
-        "mid": 61,
-        "att": 32,
-        "img": "heatmaps/2026-09-13_1T.webp",
-        "flag": "Sin la franja de banca (estimado)",
-        "minutes": 24,
-        "estNote": "Estimado desde el mapa sin la banca (app con banca: 4/54/42; margen ±3 pts)"
-      },
-      {
-        "half": 2,
-        "def": 15,
-        "mid": 66,
-        "att": 19,
-        "img": "heatmaps/2026-09-13_2T.webp",
-        "minutes": 40
-      }
-    ]
-  }
+ {
+  "date": "2026-09-13",
+  "label": "Amistoso",
+  "kind": "Amistoso",
+  "minutesPlayed": 64,
+  "note": "Entró tras ~16 min en banca/calentando. La 1ª mitad se calculó sin la franja roja de la banda izquierda (banca) y ambas mitades pesan por minutos jugados.",
+  "halves": [
+   {
+    "half": 1,
+    "def": 7,
+    "mid": 61,
+    "att": 32,
+    "img": "heatmaps/2026-09-13_1T.webp",
+    "flag": "Sin la franja de banca (estimado)",
+    "minutes": 24,
+    "estNote": "Estimado desde el mapa sin la banca (app con banca: 4/54/42; margen ±3 pts)"
+   },
+   {
+    "half": 2,
+    "def": 15,
+    "mid": 66,
+    "att": 19,
+    "img": "heatmaps/2026-09-13_2T.webp",
+    "minutes": 40
+   }
+  ]
+ },
+ {
+  "date": "2026-09-19",
+  "label": "vs Unión Carrascal",
+  "kind": "Amistoso",
+  "minutesPlayed": 60,
+  "note": "Entró en el cambio a los ~20 min del 1T y jugó el 2T completo. Jugó de 6 y de carrilero izquierdo (probó varias posiciones). La 1ª mitad se calculó sin la franja de calentamiento/banca de la banda izquierda; ambas mitades pesan por minutos jugados.",
+  "halves": [
+   {
+    "half": 1,
+    "def": 38,
+    "mid": 48,
+    "att": 14,
+    "minutes": 20,
+    "img": "heatmaps/2026-09-19_1T.webp",
+    "flag": "Sin la franja de banca (estimado)",
+    "estNote": "Estimado desde el mapa sin la banca (app con banca: 19/72/9; margen ±5 pts)"
+   },
+   {
+    "half": 2,
+    "def": 28,
+    "mid": 53,
+    "att": 19,
+    "minutes": 40,
+    "img": "heatmaps/2026-09-19_2T.webp"
+   }
+  ]
+ },
+ {
+  "date": "2026-10-10",
+  "label": "vs CD DV7 Madrid A",
+  "kind": "Liga RFFM",
+  "minutesPlayed": 80,
+  "note": "Partido oficial completo (2×40 min), de 6 pivote.",
+  "halves": [
+   {
+    "half": 1,
+    "def": 14,
+    "mid": 51,
+    "att": 35,
+    "minutes": 40,
+    "img": "heatmaps/2026-10-10_1T.webp"
+   },
+   {
+    "half": 2,
+    "def": 18,
+    "mid": 61,
+    "att": 21,
+    "minutes": 40,
+    "img": "heatmaps/2026-10-10_2T.webp"
+   }
+  ]
+ }
 ]
