@@ -4,11 +4,26 @@
     "label": "Amistoso",
     "kind": "Amistoso",
     "minutesPlayed": 64,
-    "note": "Los primeros ~16 min estuvo en banca/calentando: la franja roja pegada a la banda izquierda en la 1ª mitad es ese tiempo. Para tendencia se usa solo la 2ª mitad.",
-    "trendExclude": [1],
+    "note": "Entró tras ~16 min en banca/calentando. La 1ª mitad se calculó sin la franja roja de la banda izquierda (banca) y ambas mitades pesan por minutos jugados.",
     "halves": [
-      { "half": 1, "def": 4,  "mid": 54, "att": 42, "img": "heatmaps/2026-09-13_1T.webp", "flag": "Incluye ~16 min en banca" },
-      { "half": 2, "def": 15, "mid": 66, "att": 19, "img": "heatmaps/2026-09-13_2T.webp" }
+      {
+        "half": 1,
+        "def": 7,
+        "mid": 61,
+        "att": 32,
+        "img": "heatmaps/2026-09-13_1T.webp",
+        "flag": "Sin la franja de banca (estimado)",
+        "minutes": 24,
+        "estNote": "Estimado desde el mapa sin la banca (app con banca: 4/54/42; margen ±3 pts)"
+      },
+      {
+        "half": 2,
+        "def": 15,
+        "mid": 66,
+        "att": 19,
+        "img": "heatmaps/2026-09-13_2T.webp",
+        "minutes": 40
+      }
     ]
   }
 ]

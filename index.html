@@ -331,7 +331,13 @@ function rowToMatch(row) {
   const rpeRaw = parseFloat(row["RPE (1-10)"]);
   const rpe = !isNaN(rpeRaw) && rpeRaw > 0 ? rpeRaw : workRate > 0 ? Math.min(10, Math.round(workRate / 10)) : 6;
   const load = Math.round(mins * rpe);
-  const tier = row["Opponent Tier"] || "2";
+  // Season 26-27 (España): el objetivo es sostener nivel T1 sin importar el rival -> todo partido
+  // se evalúa contra el esperado T1 (provisional 17.0; se recalibra con los primeros 3 partidos).
+  const spainSeason = (() => {
+    const d = parseDate(row["Date"]);
+    return !!d && d >= SEASON_START;
+  })();
+  const tier = spainSeason ? "1" : row["Opponent Tier"] || "2";
   const mdi = getMDI(tier);
   const expHID = getExpectedHID(tier, mins);
   const loadRatio = expHID > 0 ? parseFloat((hid / expHID).toFixed(2)) : null;
@@ -3697,8 +3703,8 @@ function HeatmapSection() {
   }, []);
   const trend = useMemo(() => (items || []).map(m => {
     const use = (m.halves || []).filter(hf => !(m.trendExclude || []).includes(hf.half));
-    const n = use.length || 1;
-    const avg = k => Math.round(use.reduce((a, hf) => a + (hf[k] || 0), 0) / n);
+    const wsum = use.reduce((a, hf) => a + (hf.minutes || 1), 0) || 1;
+    const avg = k => Math.round(use.reduce((a, hf) => a + (hf[k] || 0) * (hf.minutes || 1), 0) / wsum);
     return {
       label: `${formatDate(m.date)} · ${m.label || ""}`,
       def: avg("def"),
@@ -3813,7 +3819,7 @@ function HeatmapSection() {
       fontFamily: "'Space Mono', monospace",
       marginTop: 6
     }
-  }, "% del tiempo por tercio (ataque ↑)")))))), h(ST, null, "TENDENCIA — % DE TIEMPO POR FRANJA (SOLO TIEMPO EN CANCHA)"), h("div", {
+  }, hf.estNote || "% del tiempo por tercio (ataque ↑)")))))), h(ST, null, "TENDENCIA — % DE TIEMPO POR FRANJA (SOLO TIEMPO EN CANCHA)"), h("div", {
     style: {
       background: C.panel,
       border: `1px solid ${C.border}`,
