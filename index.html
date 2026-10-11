@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mateo &middot; GPS Performance Dashboard v6</title>
+  <title>Mateo &middot; GPS Performance Dashboard v6.1</title>
   <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
   <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
@@ -3605,6 +3605,280 @@ function SeasonArchiveTab({
   }));
 }
 
+// ───── HEATMAPS · ¿DÓNDE JUEGA? ───────────────────────────────────────────
+// Datos en heatmaps/heatmaps.json (zonas Def/Mid/Att normalizadas al sentido de ataque).
+// Imágenes en heatmaps/*.webp (recortes de StatSports).
+const HEATMAP_URL = "heatmaps/heatmaps.json";
+const ZONE_META = [{
+  key: "att",
+  label: "ATAQUE",
+  color: C.orange
+}, {
+  key: "mid",
+  label: "MEDIO",
+  color: C.accent
+}, {
+  key: "def",
+  label: "DEFENSA",
+  color: C.blue
+}];
+function ZonePitch({
+  zones
+}) {
+  const h = React.createElement;
+  const W = 150,
+    H = 210,
+    bandH = H / 3;
+  return h("svg", {
+    viewBox: `0 0 ${W} ${H}`,
+    width: "100%",
+    style: {
+      maxWidth: 170,
+      display: "block"
+    },
+    role: "img",
+    "aria-label": `Tiempo por franja: ataque ${zones.att}%, medio ${zones.mid}%, defensa ${zones.def}%`
+  }, ZONE_META.map((z, i) => h("g", {
+    key: z.key
+  }, h("rect", {
+    x: 0,
+    y: i * bandH,
+    width: W,
+    height: bandH,
+    fill: z.color,
+    fillOpacity: Math.min(0.85, 0.1 + zones[z.key] / 75)
+  }), h("text", {
+    x: W / 2,
+    y: i * bandH + bandH / 2 - 2,
+    textAnchor: "middle",
+    fill: "#fff",
+    fontSize: 24,
+    fontWeight: 800,
+    fontFamily: "'Syne', sans-serif"
+  }, zones[z.key] + "%"), h("text", {
+    x: W / 2,
+    y: i * bandH + bandH / 2 + 14,
+    textAnchor: "middle",
+    fill: "#fff",
+    fillOpacity: 0.75,
+    fontSize: 9,
+    letterSpacing: 2,
+    fontFamily: "'Space Mono', monospace"
+  }, z.label))), h("rect", {
+    x: 0.5,
+    y: 0.5,
+    width: W - 1,
+    height: H - 1,
+    fill: "none",
+    stroke: C.dim,
+    strokeWidth: 1
+  }), h("line", {
+    x1: 0,
+    y1: bandH,
+    x2: W,
+    y2: bandH,
+    stroke: C.bg,
+    strokeWidth: 1.5
+  }), h("line", {
+    x1: 0,
+    y1: 2 * bandH,
+    x2: W,
+    y2: 2 * bandH,
+    stroke: C.bg,
+    strokeWidth: 1.5
+  }));
+}
+function HeatmapSection() {
+  const h = React.createElement;
+  const [items, setItems] = useState(null);
+  const [sel, setSel] = useState(null);
+  useEffect(() => {
+    fetch(HEATMAP_URL + "?cb=" + Date.now()).then(r => r.ok ? r.json() : []).then(d => setItems(Array.isArray(d) ? d.slice().sort((a, b) => a.date < b.date ? -1 : 1) : [])).catch(() => setItems([]));
+  }, []);
+  const trend = useMemo(() => (items || []).map(m => {
+    const use = (m.halves || []).filter(hf => !(m.trendExclude || []).includes(hf.half));
+    const n = use.length || 1;
+    const avg = k => Math.round(use.reduce((a, hf) => a + (hf[k] || 0), 0) / n);
+    return {
+      label: `${formatDate(m.date)} · ${m.label || ""}`,
+      def: avg("def"),
+      mid: avg("mid"),
+      att: avg("att")
+    };
+  }), [items]);
+  if (!items || !items.length) return null;
+  const idx = sel == null || sel >= items.length ? items.length - 1 : sel;
+  const m = items[idx];
+  const mean = k => Math.round(trend.reduce((a, t) => a + t[k], 0) / trend.length);
+  const chip = (on, label, onClick, key) => h("button", {
+    key,
+    onClick,
+    style: {
+      background: on ? C.accent : "transparent",
+      color: on ? "#000" : C.dim,
+      border: `1px solid ${on ? C.accent : C.border}`,
+      borderRadius: 6,
+      padding: "5px 12px",
+      fontFamily: "'Space Mono', monospace",
+      fontSize: 10,
+      letterSpacing: 1,
+      cursor: "pointer"
+    }
+  }, label);
+  return h("div", {
+    style: {
+      marginTop: 28
+    }
+  }, h(ST, null, "¿DÓNDE JUEGA? — MAPAS DE CALOR Y FRANJAS (ATAQUE ↑)"), h("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      flexWrap: "wrap",
+      marginBottom: 10
+    }
+  }, items.map((it, i) => chip(i === idx, `${formatDate(it.date)} · ${it.label || ""}`, () => setSel(i), it.date + i))), h("p", {
+    style: {
+      color: C.dim,
+      fontSize: 10,
+      fontFamily: "'Space Mono', monospace",
+      margin: "0 0 12px",
+      lineHeight: 1.5
+    }
+  }, m.label, " · ", m.minutesPlayed ? `${m.minutesPlayed} min jugados` : "", m.note ? " · " : "", m.note && h("span", {
+    style: {
+      color: C.amber
+    }
+  }, m.note)), h("div", {
+    style: {
+      display: "flex",
+      gap: 14,
+      flexWrap: "wrap"
+    }
+  }, (m.halves || []).map(hf => h("div", {
+    key: hf.half,
+    style: {
+      background: C.panel,
+      border: `1px solid ${C.border}`,
+      borderRadius: 12,
+      padding: "14px 16px",
+      flex: "1 1 340px",
+      minWidth: 0
+    }
+  }, h("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      marginBottom: 10,
+      flexWrap: "wrap"
+    }
+  }, h("span", {
+    style: {
+      color: C.accent,
+      fontFamily: "'Space Mono', monospace",
+      fontSize: 10,
+      letterSpacing: 2
+    }
+  }, hf.half === 1 ? "1ª MITAD" : "2ª MITAD"), hf.flag && h(Badge, {
+    color: C.amber,
+    label: "⚠ " + hf.flag
+  })), h("div", {
+    style: {
+      display: "flex",
+      gap: 14,
+      alignItems: "flex-start"
+    }
+  }, hf.img && h("img", {
+    src: hf.img,
+    alt: `Mapa de calor ${hf.half}ª mitad`,
+    loading: "lazy",
+    style: {
+      width: "58%",
+      maxWidth: 260,
+      borderRadius: 8,
+      border: `1px solid ${C.border}`,
+      display: "block"
+    }
+  }), h("div", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, h(ZonePitch, {
+    zones: hf
+  }), h("p", {
+    style: {
+      color: C.dim,
+      fontSize: 9,
+      fontFamily: "'Space Mono', monospace",
+      marginTop: 6
+    }
+  }, "% del tiempo por tercio (ataque ↑)")))))), h(ST, null, "TENDENCIA — % DE TIEMPO POR FRANJA (SOLO TIEMPO EN CANCHA)"), h("div", {
+    style: {
+      background: C.panel,
+      border: `1px solid ${C.border}`,
+      borderRadius: 12,
+      padding: "12px 8px 4px"
+    }
+  }, h(ResponsiveContainer, {
+    width: "100%",
+    height: 200
+  }, h(BarChart, {
+    data: trend,
+    barSize: 64,
+    margin: {
+      top: 4,
+      right: 16,
+      bottom: 0,
+      left: -10
+    }
+  }, h(CartesianGrid, {
+    strokeDasharray: "3 3",
+    stroke: C.border
+  }), h(XAxis, {
+    dataKey: "label",
+    tick: {
+      fill: C.dim,
+      fontSize: 9
+    }
+  }), h(YAxis, {
+    domain: [0, 100],
+    ticks: [0, 25, 50, 75, 100],
+    unit: "%",
+    tick: {
+      fill: C.dim,
+      fontSize: 9
+    }
+  }), h(Tooltip, TOOLTIP), h(Legend, {
+    wrapperStyle: {
+      fontSize: 10
+    }
+  }), h(Bar, {
+    dataKey: "att",
+    name: "Ataque",
+    stackId: "z",
+    fill: C.orange
+  }), h(Bar, {
+    dataKey: "mid",
+    name: "Medio",
+    stackId: "z",
+    fill: C.accent
+  }), h(Bar, {
+    dataKey: "def",
+    name: "Defensa",
+    stackId: "z",
+    fill: C.blue
+  }))), h("p", {
+    style: {
+      color: C.dim,
+      fontSize: 10,
+      fontFamily: "'Space Mono', monospace",
+      margin: "4px 8px 10px",
+      lineHeight: 1.5
+    }
+  }, trend.length >= 3 ? `Referencia = tu propio promedio (${trend.length} partidos): Ataque ${mean("att")}% · Medio ${mean("mid")}% · Defensa ${mean("def")}%.` : "Referencia: tu propio promedio, disponible desde 3 partidos (aún no hay suficientes para fijarla).")));
+}
+
 // ───── DASHBOARD COMPONENT & ROOT RENDER ───────────────────────────────────
 function Dashboard() {
   const [data, setData] = useState({
@@ -3739,12 +4013,12 @@ function Dashboard() {
       textTransform: "uppercase",
       cursor: "pointer"
     }
-  }, label))), tab === "matches" && /*#__PURE__*/React.createElement(MatchesTab, {
+  }, label))), tab === "matches" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(MatchesTab, {
     matches: curMatches,
     calibrate: true,
     loading: !data.loaded,
     emptyText: "Season 26-27: sin partidos registrados todavía"
-  }), tab === "training" && /*#__PURE__*/React.createElement(TrainingTab, {
+  }), /*#__PURE__*/React.createElement(HeatmapSection, null)), tab === "training" && /*#__PURE__*/React.createElement(TrainingTab, {
     sessions: curTraining,
     liveFromSheet: data.liveTraining,
     calibrate: true
@@ -3766,7 +4040,7 @@ function Dashboard() {
       margin: 0,
       marginBottom: 8
     }
-  }, "Dashboard v6 · Season 26-27 · Google Sheets ", data.liveMatch ? "LIVE" : "SEED", " · ", new Date().toLocaleDateString("es-MX")))));
+  }, "Dashboard v6.1 · Season 26-27 · Google Sheets ", data.liveMatch ? "LIVE" : "SEED", " · ", new Date().toLocaleDateString("es-MX")))));
 }
 ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(Dashboard, null));
 </script>

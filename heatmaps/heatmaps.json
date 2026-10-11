@@ -1,0 +1,14 @@
+[
+  {
+    "date": "2026-09-13",
+    "label": "Amistoso",
+    "kind": "Amistoso",
+    "minutesPlayed": 64,
+    "note": "Los primeros ~16 min estuvo en banca/calentando: la franja roja pegada a la banda izquierda en la 1ª mitad es ese tiempo. Para tendencia se usa solo la 2ª mitad.",
+    "trendExclude": [1],
+    "halves": [
+      { "half": 1, "def": 4,  "mid": 54, "att": 42, "img": "heatmaps/2026-09-13_1T.webp", "flag": "Incluye ~16 min en banca" },
+      { "half": 2, "def": 15, "mid": 66, "att": 19, "img": "heatmaps/2026-09-13_2T.webp" }
+    ]
+  }
+]
