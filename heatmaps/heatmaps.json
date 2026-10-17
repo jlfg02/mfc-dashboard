@@ -77,5 +77,30 @@
     "img": "heatmaps/2026-10-10_2T.webp"
    }
   ]
+ },
+ {
+  "date": "2026-10-17",
+  "label": "vs Ardave",
+  "kind": "Liga RFFM",
+  "minutesPlayed": 80,
+  "note": "Partido oficial completo (2×40 min), de 6 pivote. Derrota 1-5: en la 2ª parte se adelantó (45% en el tercio de ataque).",
+  "halves": [
+   {
+    "half": 1,
+    "def": 14,
+    "mid": 63,
+    "att": 23,
+    "minutes": 40,
+    "img": "heatmaps/2026-10-17_1T.webp"
+   },
+   {
+    "half": 2,
+    "def": 12,
+    "mid": 43,
+    "att": 45,
+    "minutes": 40,
+    "img": "heatmaps/2026-10-17_2T.webp"
+   }
+  ]
  }
 ]
