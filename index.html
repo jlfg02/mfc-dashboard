@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mateo &middot; GPS Performance Dashboard v6.5</title>
+  <title>Mateo &middot; GPS Performance Dashboard v6.6</title>
   <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
   <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
@@ -69,6 +69,7 @@ const {
   Legend,
   ResponsiveContainer,
   ReferenceLine,
+  ReferenceArea,
   Cell,
   ComposedChart,
   Area
@@ -604,11 +605,14 @@ function Badge({
     }
   }, label);
 }
+// v6.6: el ACWR solo es confiable con carga de partidos Y entrenos (mín. 3 entrenos en 28 días)
+let ACWR_RELIABLE = true;
 function AlertBar({
   acwr,
   loadRatio,
   scope = ""
 }) {
+  if (ACWR_RELIABLE === false) acwr = undefined;
   const alerts = [];
   const pre = scope ? `[${scope}] ` : "";
   if (acwr > 1.5) alerts.push({
@@ -698,6 +702,7 @@ function UnifiedACWRBanner({
     }
   }, sub));
   if (!unified) return infoCard("ACWR · Season 26-27", "Sin sesiones registradas", "Aún no hay partidos ni entrenos de la temporada 26-27 en el Sheet (fecha ≥ 1-jul-2026). El ACWR arranca desde cero con la primera sesión.", C.dim);
+  if (unified.insufficientTraining) return infoCard("ACWR · Season 26-27 · SIN DATOS SUFICIENTES", "No calculable todavía", `El ACWR necesita carga de partidos Y de entrenamientos. Hay ${unified.trainRecent} entrenos registrados en los últimos 28 días (mínimo 3). Con solo partidos la carga crónica se subestima y el ACWR sale inflado: no lo uses para decidir carga. Carga aguda 7d = ${unified.acuteLoad} UA · crónica 28d = ${unified.chronicLoad} UA. Registra los entrenos del GPS (con RPE) en WEEKPRACTICE_LOG.`, C.dim);
   if (unified.calibrating) {
     const d = Math.max(0, unified.daysOfData ?? 0);
     const pct = Math.min(100, Math.round(d / ACWR_CALIBRATION_DAYS * 100));
@@ -845,7 +850,130 @@ function applySpainBaseline(arr) {
   });
 }
 
-// Detalle por mitades y cardio (StatSports). Se agrega una entrada por partido, clave = fecha ISO.
+// ───── v6.6: ESTÁNDAR DE FRANJAS + MODO MATEO ───────────────────────────────
+// Referencia = el propio Mateo en España. Umbrales = propuesta inicial (ajustables):
+//  "more": más es mejor  → 🟢 ≥ −10% vs su promedio · 🟡 −10% a −20% · 🔴 peor que −20%
+//  "zone": zona óptima   → Load Ratio 🟢 0,90–1,10 · 🟡 0,75–0,90 / 1,10–1,25 · 🔴 fuera
+//  "less": menos es mejor→ RPE 🟢 ≤7 🟡 8 🔴 ≥9 · Frenadas/Arrancadas 🟢 ≤1,2 🟡 ≤1,4 🔴 >1,4 · Caída 2º tiempo 🟢 ≤10% 🟡 ≤20% 🔴 >20%
+const GRADE_COL = () => [C.green, C.amber, C.red];
+const GRADE_TXT = ["En rango", "Vigilar", "Atención"];
+const TH = { rpe: [7, 8], decelAccel: [1.2, 1.4], drop2h: [10, 20] };
+function gradeMetric(kind, v, ref, th) {
+  if (v == null || isNaN(v)) return null;
+  if (kind === "more") { if (ref == null || !(ref > 0)) return null; const p = (v - ref) / ref * 100; return p >= -10 ? 0 : p >= -20 ? 1 : 2; }
+  if (kind === "zone") return (v >= 0.9 && v <= 1.1) ? 0 : (v >= 0.75 && v <= 1.25) ? 1 : 2;
+  if (kind === "less") return v <= th[0] ? 0 : v <= th[1] ? 1 : 2;
+  return null;
+}
+// Glosario: tech = nombre técnico · mateo = nombre claro · what = qué mide (se muestra en ambos modos)
+const GLOSS = {
+  hid:        { tech: "HID (m)", mateo: "Metros corriendo fuerte", what: "Metros que corres a ritmo alto durante el partido." },
+  hidMin:     { tech: "HID por minuto", mateo: "Cuánto corres fuerte cada minuto", what: "HID dividido entre los minutos jugados: permite compararte aunque juegues 45 u 80 minutos.", read: ["Corriste fuerte a tu ritmo habitual", "Un poco por debajo de tu ritmo", "Muy por debajo de tu ritmo"] },
+  loadRatio:  { tech: "Load Ratio", mateo: "Tú contra tú", what: "HID real entre el HID que esperabas según tu promedio en España. 1,0 = tu nivel normal; más de 1,0 = más fuerte de lo normal; menos de 1,0 = más suave.", read: ["Partido en tu nivel normal", "Algo fuera de tu nivel normal", "Muy fuera de tu nivel normal"] },
+  sprints:    { tech: "Sprints por min", mateo: "Carreras a toda velocidad", what: "Número de carreras a máxima velocidad por minuto jugado.", read: ["Explosividad en tu nivel", "Algo menos explosivo de lo normal", "Mucho menos explosivo de lo normal"] },
+  drop2h:     { tech: "Caída del HID en el 2º tiempo", mateo: "¿Aguanté el segundo tiempo?", what: "Cuánto bajó el HID del 2º tiempo respecto al 1º. Menos caída = mejor resistencia.", read: ["Mantuviste el nivel", "Bajaste algo en el 2º tiempo", "Bajón grande en el 2º tiempo"] },
+  decelAccel: { tech: "Decel / Accel", mateo: "Frenadas por cada arrancada", what: "Frenadas ÷ arrancadas. Más de 1,2 significa más frenadas que arrancadas: cansa más tobillos, pantorrillas y rodillas.", read: ["Carga de piernas equilibrada", "Más frenadas que arrancadas: vigilar piernas", "Muchas frenadas: protege tobillos y pantorrillas"] },
+  rpe:        { tech: "RPE (1-10)", mateo: "Tu nota de esfuerzo", what: "Qué tan duro sentiste el partido, de 1 (muy suave) a 10 (al límite).", read: ["Esfuerzo manejable", "Esfuerzo alto", "Esfuerzo muy alto: priorizar recuperación"] },
+  load:       { tech: "Carga (UA)", mateo: "Qué tan duro fue", what: "UA = unidades de esfuerzo = tu nota de esfuerzo (RPE) × minutos jugados." },
+  intensity:  { tech: "Intensidad (m/min)", mateo: "Ritmo del partido", what: "Metros totales recorridos por minuto." },
+  sprintMin:  { tech: "Sprint (m por min)", mateo: "Metros a toda velocidad por minuto", what: "Distancia recorrida en sprint por cada minuto jugado." },
+  accelMin:   { tech: "Aceleraciones por min", mateo: "Arrancadas por minuto", what: "Arrancadas fuertes por minuto jugado." },
+  decelMin:   { tech: "Deceleraciones por min", mateo: "Frenadas por minuto", what: "Frenadas fuertes por minuto jugado." },
+  maxSpeed:   { tech: "Vel. máxima (m/s)", mateo: "Tu velocidad máxima (m/s)", what: "Mayor velocidad alcanzada. 7 m/s ≈ 25 km/h." },
+  workRate:   { tech: "Work Rate (%)", mateo: "Qué tanto trabajaste", what: "Indicador de StatSports sobre cuánto trabajo realizaste en el partido." },
+  hrZones:    { tech: "Zonas de frecuencia cardíaca", mateo: "Qué tan fuerte latió tu corazón", what: "Zona 1 = suave · Zona 5 = al límite." }
+};
+// Títulos de gráficas: tech = título original · q = pregunta que responde la gráfica en Modo Mateo
+const CHART_INFO = {
+  acwr:  { q: "¿Estoy acumulando demasiado esfuerzo?", what: "ACWR = esfuerzo de los últimos 7 días ÷ el de las últimas 4 semanas. Entre 0,8 y 1,3 es la zona segura; arriba de 1,5 hay riesgo de lesión." },
+  hidExp:{ q: "¿Corrí lo que mi cuerpo suele correr?", what: "Barras: metros corriendo fuerte (HID) reales contra los esperados según tu promedio en España. Color de la barra = Load Ratio (verde = tu nivel normal)." },
+  inten: { q: "¿A qué ritmo estoy jugando?", what: "Compara cuánto corres fuerte por minuto (HID/min) con el ritmo general del partido (m/min)." },
+  hr:    { q: "¿Qué tan fuerte latió mi corazón?", what: "Minutos en cada zona de frecuencia cardíaca. Zonas 4-5 = esfuerzo muy alto: mucho tiempo ahí cansa más." },
+  accel: { q: "¿Cuánto trabajaron mis piernas arrancando y frenando?", what: "Arrancadas (aceleraciones) y frenadas (deceleraciones). Las frenadas fuertes cargan más tobillos, pantorrillas y rodillas." }
+};
+
+const ModeCtx = React.createContext({ mode: "tech", setMode: () => {} });
+function ModeProvider({ children }) {
+  let init = "tech";
+  try { const v = localStorage.getItem("mfc_mode"); if (v === "mateo" || v === "tech") init = v; } catch (e) {}
+  const [mode, setModeState] = useState(init);
+  const setMode = m => { setModeState(m); try { localStorage.setItem("mfc_mode", m); } catch (e) {} };
+  return React.createElement(ModeCtx.Provider, { value: { mode, setMode } }, children);
+}
+function ModeToggle() {
+  const { mode, setMode } = React.useContext(ModeCtx);
+  const b = (k, lbl) => React.createElement("button", {
+    key: k, onClick: () => setMode(k),
+    style: { background: mode === k ? C.accent : "transparent", color: mode === k ? "#000" : C.dim, border: "1px solid " + (mode === k ? C.accent : C.border), borderRadius: 6, padding: "6px 12px", fontFamily: "'Space Mono', monospace", fontSize: 10, letterSpacing: 1, textTransform: "uppercase", cursor: "pointer" }
+  }, lbl);
+  return React.createElement("div", { style: { marginLeft: "auto", display: "flex", gap: 6 } }, b("tech", "Técnico"), b("mateo", "Modo Mateo"));
+}
+function useMode() { return React.useContext(ModeCtx).mode; }
+const gl = (mode, k) => GLOSS[k] ? (mode === "mateo" ? GLOSS[k].mateo : GLOSS[k].tech) : k;
+
+function TitleQ({ k, tech }) {
+  const mode = useMode();
+  const info = CHART_INFO[k] || {};
+  return React.createElement(React.Fragment, null,
+    React.createElement(ST, null, mode === "mateo" && info.q ? info.q : tech),
+    info.what && React.createElement("p", { style: { color: C.dim, fontSize: 10, fontFamily: "'Space Mono', monospace", margin: "-2px 8px 10px", lineHeight: 1.5 } }, "Qué mide: " + info.what));
+}
+function LRLabel() {
+  const mode = useMode();
+  return React.createElement(React.Fragment, null,
+    (mode === "mateo" ? "TÚ CONTRA TÚ (Load Ratio) — HID real ÷ HID esperado" : "LOAD RATIO — HID Real / " + "HID Expected"),
+    React.createElement("span", { style: { display: "block", marginTop: 3, lineHeight: 1.5 } },
+      "Franjas: 🟢 0,90–1,10 tu nivel normal · 🟡 0,75–0,90 o 1,10–1,25 vigilar · 🔴 fuera de 0,75–1,25 (referencia: tu promedio en España)"));
+}
+
+// Valores del último partido de España contra su promedio previo
+function spainContext(list) {
+  const sp = (list || []).filter(x => !isPastSeason(x) && x.mins > 0).sort(byDate);
+  if (!sp.length) return null;
+  const last = sp[sp.length - 1], prior = sp.slice(0, -1);
+  const avg = f => { const v = prior.map(f).filter(x => x != null && x > 0); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  return { last, prior, avg, prev: prior.length ? prior[prior.length - 1] : null };
+}
+const _perMin = (x, k) => x.mins > 0 ? x[k] / x.mins : null;
+
+function Semaforo({ matches }) {
+  const mode = useMode();
+  const ctx = spainContext(matches);
+  if (!ctx) return null;
+  const { last, avg } = ctx;
+  const det = MATCH_DETAIL[_iso(last.dateObj)];
+  const drop = det && det.halves.h1.hid > 0 ? (det.halves.h1.hid - det.halves.h2.hid) / det.halves.h1.hid * 100 : null;
+  const refHid = last.spainBase != null ? last.spainBase : avg(x => x.hidMin);
+  const sprintsMin = _perMin(last, "sprintCount");
+  const da = last.accel > 0 ? last.decel / last.accel : null;
+  const items = [
+    { k: "hidMin", v: last.hidMin, d: 1, g: gradeMetric("more", last.hidMin, refHid), sub: refHid ? "tu promedio: " + refHid.toFixed(1) : "" },
+    { k: "loadRatio", v: last.loadRatio, d: 2, g: gradeMetric("zone", last.loadRatio), sub: "ideal 0,90–1,10" },
+    { k: "sprints", v: sprintsMin, d: 2, g: gradeMetric("more", sprintsMin, avg(x => _perMin(x, "sprintCount"))), sub: avg(x => _perMin(x, "sprintCount")) ? "tu promedio: " + avg(x => _perMin(x, "sprintCount")).toFixed(2) : "" },
+    { k: "drop2h", v: drop, d: 0, suf: "%", g: gradeMetric("less", drop, null, TH.drop2h), sub: "ideal hasta 10%" },
+    { k: "decelAccel", v: da, d: 2, g: gradeMetric("less", da, null, TH.decelAccel), sub: "ideal hasta 1,2" },
+    { k: "rpe", v: last.rpe, d: 0, g: gradeMetric("less", last.rpe, null, TH.rpe), sub: "ideal hasta 7" }
+  ];
+  const cols = GRADE_COL();
+  const nR = items.filter(i => i.g === 2).length, nA = items.filter(i => i.g === 1).length;
+  const head = nR ? nR + " en rojo y " + nA + " en ámbar" : nA ? nA + " en ámbar, ninguno en rojo" : "todo en rango";
+  return React.createElement("div", { style: { marginBottom: 18 } },
+    React.createElement(ST, null, (mode === "mateo" ? "Tu partido en 6 señales" : "SEMÁFORO DEL ÚLTIMO PARTIDO") + " — vs " + last.opponent + " (" + last.date + ")"),
+    React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 } },
+      items.map(it => {
+        const col = it.g == null ? C.dim : cols[it.g];
+        const G = GLOSS[it.k];
+        return React.createElement("div", { key: it.k, title: G.what, style: { background: C.panel, border: "1px solid " + col + "66", borderLeft: "4px solid " + col, borderRadius: 8, padding: "10px 12px" } },
+          React.createElement("div", { style: { color: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace", letterSpacing: 1, textTransform: "uppercase" } }, gl(mode, it.k)),
+          React.createElement("div", { style: { color: col, fontSize: 24, fontWeight: 800, fontFamily: "'Syne', sans-serif", margin: "2px 0" } }, it.v == null ? "—" : it.v.toFixed(it.d) + (it.suf || "")),
+          React.createElement("div", { style: { color: C.text, fontSize: 10, lineHeight: 1.4 } }, it.g == null ? "Sin referencia todavía" : G.read[it.g]),
+          React.createElement("div", { style: { color: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace", marginTop: 4 } }, (it.g == null ? "" : GRADE_TXT[it.g] + " · ") + it.sub));
+      })),
+    React.createElement("p", { style: { color: C.dim, fontSize: 9, fontFamily: "'Space Mono', monospace", margin: "8px 2px 0", lineHeight: 1.5 } },
+      "Resumen: " + head + ". 🟢 En rango · 🟡 Vigilar · 🔴 Atención. La referencia es tu propio promedio en España; los umbrales son una propuesta inicial y se afinan con más partidos. Pasa el cursor sobre cada tarjeta para ver qué mide."));
+}
+
+// ───── DETALLE DEL ÚLTIMO PARTIDO (con franjas) ─────────────────────────────
 const MATCH_DETAIL = {
   "2026-10-17": {
     halves: {
@@ -856,7 +984,7 @@ const MATCH_DETAIL = {
     bestSprint: "7,29 m/s en la 1ª parte (mejor de la 2ª: 6,87 m/s)",
     notes: [
       "Mismo volumen y ritmo que el partido anterior (8.941 vs 8.958 m), pero con menos explosividad: sprints −28% y metros de sprint −23%.",
-      "La 2ª parte bajó mucho: HID −26%, HSR 175→50 m y sprints 24→14.",
+      "La 2ª parte bajó mucho: HID −27%, HSR 175→50 m y sprints 24→14.",
       "Mapa de zonas: en la 1ª parte jugó sobre todo en el medio (63%); en la 2ª se adelantó (45% en el tercio de ataque), con el partido en contra (1-5).",
       "Cardio muy exigente: 72 de 83 min en zonas 4-5. FC media 172 (89% de su máxima, 193).",
       "Frena más de lo que arranca: 85 deceleraciones vs 66 aceleraciones (1,29). Es carga excéntrica en las piernas.",
@@ -868,6 +996,7 @@ const _iso = d => d ? d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(
 
 function MatchDetailSection({ matches }) {
   const h = React.createElement;
+  const mode = useMode();
   const mono = "'Space Mono', monospace";
   const list = matches || [];
   let idx = -1;
@@ -877,19 +1006,20 @@ function MatchDetailSection({ matches }) {
   const det = MATCH_DETAIL[_iso(m.dateObj)];
   const prior = list.slice(0, idx).filter(x => !isPastSeason(x) && x.mins > 0);
   const prev = prior[prior.length - 1];
-  const pm = (x, k) => x.mins > 0 ? x[k] / x.mins : null;
+  const cols = GRADE_COL();
+  // [clave glosario, función, decimales, tipo de franja, umbral]
   const metrics = [
-    ["HID por minuto (m)", x => x.hidMin, 1],
-    ["Intensidad (m/min)", x => x.intensity, 1],
-    ["Sprint (m por min)", x => pm(x, "sprintDist"), 2],
-    ["Sprints (# por min)", x => pm(x, "sprintCount"), 2],
-    ["Aceleraciones por min", x => pm(x, "accel"), 2],
-    ["Deceleraciones por min", x => pm(x, "decel"), 2],
-    ["Decel / Accel", x => x.accel > 0 ? x.decel / x.accel : null, 2],
-    ["Vel. máxima (m/s)", x => x.maxSpeed, 2],
-    ["Work Rate (%)", x => x.workRate, 0],
-    ["RPE (1-10)", x => x.rpe, 1],
-    ["Carga (RPE × min)", x => x.load, 0]
+    ["hidMin", x => x.hidMin, 1, "more"],
+    ["intensity", x => x.intensity, 1, "more"],
+    ["sprintMin", x => _perMin(x, "sprintDist"), 2, "more"],
+    ["sprints", x => _perMin(x, "sprintCount"), 2, "more"],
+    ["accelMin", x => _perMin(x, "accel"), 2, null],
+    ["decelMin", x => _perMin(x, "decel"), 2, null],
+    ["decelAccel", x => x.accel > 0 ? x.decel / x.accel : null, 2, "less", TH.decelAccel],
+    ["maxSpeed", x => x.maxSpeed, 2, null],
+    ["workRate", x => x.workRate, 0, null],
+    ["rpe", x => x.rpe, 1, "less", TH.rpe],
+    ["load", x => x.load, 0, null]
   ];
   const mean = f => { const v = prior.map(f).filter(x => x != null && x > 0); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
   const fmt = (v, d) => v == null ? "—" : v.toFixed(d);
@@ -897,42 +1027,47 @@ function MatchDetailSection({ matches }) {
   const dlTxt = v => v == null ? "—" : (v > 0 ? "+" : "") + v.toFixed(0) + "%";
   const dlCol = v => v == null ? C.dim : Math.abs(v) > 20 ? C.red : Math.abs(v) > 8 ? C.amber : C.green;
   const hv = [["Distancia total (m)", "td"], ["HID (m)", "hid"], ["HSR (m)", "hsr"], ["Sprint (m)", "sprintDist"], ["Sprints (#)", "sprints"]];
+  const hvM = { td: "Metros totales", hid: "Metros corriendo fuerte", hsr: "Metros a ritmo alto-muy alto (HSR)", sprintDist: "Metros a toda velocidad", sprints: "Carreras a toda velocidad" };
   const zc = [C.dim, C.blue, C.green, C.amber, C.red];
   const zmax = Math.max.apply(null, det.hr.zones);
   const card = { background: C.panel, border: "1px solid " + C.border, borderRadius: 10, padding: 16, marginBottom: 14 };
   const sub = { color: C.dim, fontSize: 10, fontFamily: mono, marginBottom: 10, lineHeight: 1.5 };
+  const dot = g => h("span", { style: { display: "inline-block", width: 10, height: 10, borderRadius: 5, background: g == null ? C.border : cols[g], marginRight: 6, verticalAlign: "middle" } });
   return h("div", null,
-    h(ST, null, "DETALLE DEL ÚLTIMO PARTIDO — vs " + m.opponent + " (" + m.date + ")"),
+    h(ST, null, (mode === "mateo" ? "Tu partido contra " + m.opponent : "DETALLE DEL ÚLTIMO PARTIDO — vs " + m.opponent) + " (" + m.date + ")"),
     h("div", { style: card },
-      h("p", { style: sub }, "¿Cómo fue este partido comparado con el anterior y con TU promedio en España? Verde = parecido, ámbar = cambio moderado, rojo = cambio grande."),
+      h("p", { style: sub }, (mode === "mateo" ? "¿Cómo jugué comparado con mi partido anterior y con mi promedio en España? " : "¿Cómo fue este partido comparado con el anterior y con TU promedio en España? ") + "El punto de color es la franja: 🟢 en rango, 🟡 vigilar, 🔴 atención (sin punto = dato informativo)."),
       h("div", { style: { overflowX: "auto" } },
         h("table", null,
           h("thead", null, h("tr", null, ["Métrica", "Hoy", prev ? "Anterior" : "—", "Prom. España", "Δ anterior", "Δ promedio"].map(t => h("th", { key: t }, t)))),
-          h("tbody", null, metrics.map(([lbl, f, d]) => {
+          h("tbody", null, metrics.map(([k, f, d, kind, th]) => {
             const cur = f(m), pv = prev ? f(prev) : null, av = mean(f);
             const d1 = dl(cur, pv), d2 = dl(cur, av);
-            return h("tr", { key: lbl },
-              h("td", { style: { color: C.text } }, lbl),
-              h("td", { style: { color: C.accent, fontWeight: 700 } }, fmt(cur, d)),
+            const g = kind ? gradeMetric(kind, cur, av, th) : null;
+            return h("tr", { key: k },
+              h("td", { style: { color: C.text }, title: GLOSS[k].what }, dot(g), gl(mode, k)),
+              h("td", { style: { color: g == null ? C.accent : cols[g], fontWeight: 700 } }, fmt(cur, d)),
               h("td", null, fmt(pv, d)),
               h("td", null, fmt(av, d)),
               h("td", { style: { color: dlCol(d1) } }, dlTxt(d1)),
               h("td", { style: { color: dlCol(d2) } }, dlTxt(d2)));
           })))),
-      m.expBasis && h("p", { style: Object.assign({}, sub, { marginTop: 10, marginBottom: 0 }) }, "Load Ratio " + m.loadRatio + " (HID real " + m.hid + " m vs esperado " + m.expHID + " m) — " + m.expBasis + ".")),
+      m.expBasis && h("p", { style: Object.assign({}, sub, { marginTop: 10, marginBottom: 0 }) }, (mode === "mateo" ? "Tú contra tú: " : "Load Ratio ") + m.loadRatio + " (HID real " + m.hid + " m vs esperado " + m.expHID + " m) — " + m.expBasis + ".")),
     h("div", { style: card },
-      h("p", { style: sub }, "1ª parte vs 2ª parte: ¿mantuviste el nivel o bajaste? Barra azul = 1ª parte, naranja = 2ª parte."),
+      h("p", { style: sub }, (mode === "mateo" ? "¿Aguanté el segundo tiempo? " : "1ª parte vs 2ª parte: ¿mantuviste el nivel o bajaste? ") + "Barra azul = 1ª parte, naranja = 2ª parte."),
       hv.map(([lbl, k]) => {
         const a = det.halves.h1[k], b = det.halves.h2[k], mx = Math.max(a, b), d = dl(b, a);
+        const g = k === "hid" ? gradeMetric("less", d == null ? null : -d, null, TH.drop2h) : null;
         return h("div", { key: k, style: { marginBottom: 10 } },
           h("div", { style: { display: "flex", justifyContent: "space-between", fontSize: 10, fontFamily: mono, color: C.text, gap: 8, flexWrap: "wrap" } },
-            h("span", null, lbl), h("span", { style: { color: dlCol(d) } }, "1ª " + a + " → 2ª " + b + " (" + dlTxt(d) + ")")),
+            h("span", null, dot(g), mode === "mateo" ? hvM[k] : lbl), h("span", { style: { color: dlCol(d) } }, "1ª " + a + " → 2ª " + b + " (" + dlTxt(d) + ")")),
           h("div", { style: { display: "flex", gap: 3, marginTop: 3 } },
             h("div", { style: { height: 6, borderRadius: 3, background: C.accent, width: (a / mx * 50) + "%" } }),
             h("div", { style: { height: 6, borderRadius: 3, background: C.orange, width: (b / mx * 50) + "%" } })));
-      })),
+      }),
+      h("p", { style: Object.assign({}, sub, { marginBottom: 0 }) }, "Franja de la caída del HID en el 2º tiempo: 🟢 hasta −10% · 🟡 −10% a −20% · 🔴 más de −20%.")),
     h("div", { style: card },
-      h("p", { style: sub }, "Frecuencia cardíaca: minutos en cada zona. FC media " + det.hr.avg + " bpm, máxima " + det.hr.max + " bpm."),
+      h("p", { style: sub }, gl(mode, "hrZones") + ": minutos en cada zona. FC media " + det.hr.avg + " bpm, máxima " + det.hr.max + " bpm. " + GLOSS.hrZones.what),
       det.hr.zones.map((v, i) => h("div", { key: i, style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 6 } },
         h("span", { style: { width: 60, fontSize: 10, fontFamily: mono, color: C.text } }, "Zona " + (i + 1)),
         h("div", { style: { flex: 1, background: C.panel2, borderRadius: 3, height: 8 } },
@@ -1009,8 +1144,8 @@ function MatchesTab({
   }), /*#__PURE__*/React.createElement(KPI, {
     label: "ACWR parcial partidos",
     value: latest === null || latest === void 0 ? void 0 : latest.acwr,
-    color: acwrColor(latest === null || latest === void 0 ? void 0 : latest.acwr),
-    sub: acwrLabel(latest === null || latest === void 0 ? void 0 : latest.acwr)
+    color: ACWR_RELIABLE === false ? C.dim : acwrColor(latest === null || latest === void 0 ? void 0 : latest.acwr),
+    sub: ACWR_RELIABLE === false ? "Sin entrenos: no confiable" : acwrLabel(latest === null || latest === void 0 ? void 0 : latest.acwr)
   }), /*#__PURE__*/React.createElement(KPI, {
     label: "Load Ratio (últ)",
     value: latest === null || latest === void 0 ? void 0 : latest.loadRatio,
@@ -1018,7 +1153,10 @@ function MatchesTab({
     sub: loadRatioLabel(latest === null || latest === void 0 ? void 0 : latest.loadRatio)
   })), /*#__PURE__*/React.createElement(ProgressSection, {
     matches: matches
-  }), /*#__PURE__*/React.createElement(ST, null, "ACWR PARCIAL — solo partidos (ver banner superior para ACWR REAL)"), /*#__PURE__*/React.createElement("div", {
+  }), /*#__PURE__*/React.createElement(TitleQ, {
+    k: "acwr",
+    tech: "ACWR PARCIAL — solo partidos (ver banner superior para ACWR REAL)"
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 6,
@@ -1081,7 +1219,10 @@ function MatchesTab({
       r: 4,
       fill: C.accent
     }
-  }))), /*#__PURE__*/React.createElement(ST, null, "HID ACTUAL vs EXPECTED HID — por tier del rival"), /*#__PURE__*/React.createElement("p", {
+  }))), /*#__PURE__*/React.createElement(TitleQ, {
+    k: "hidExp",
+    tech: "HID ACTUAL vs EXPECTED HID — por tier del rival"
+  }), /*#__PURE__*/React.createElement("p", {
     style: {
       color: C.dim,
       fontSize: 10,
@@ -1143,7 +1284,7 @@ function MatchesTab({
       fontFamily: "'Space Mono', monospace",
       marginBottom: 8
     }
-  }, "LOAD RATIO — HID Real / HID Expected"), /*#__PURE__*/React.createElement(ResponsiveContainer, {
+  }, /*#__PURE__*/React.createElement(LRLabel, null)), /*#__PURE__*/React.createElement(ResponsiveContainer, {
     width: "100%",
     height: 120
   }, /*#__PURE__*/React.createElement(LineChart, {
@@ -1165,20 +1306,13 @@ function MatchesTab({
       fontFamily: "'Space Mono'"
     }
   }), /*#__PURE__*/React.createElement(YAxis, {
-    domain: [0, 2],
+    domain: [0.5, 1.5],
+    allowDataOverflow: true,
     tick: {
       fill: C.dim,
       fontSize: 9
     }
-  }), /*#__PURE__*/React.createElement(Tooltip, MATCH_TT), /*#__PURE__*/React.createElement(ReferenceLine, {
-    y: 1.35,
-    stroke: C.red,
-    strokeDasharray: "4 2"
-  }), /*#__PURE__*/React.createElement(ReferenceLine, {
-    y: 0.75,
-    stroke: C.purple,
-    strokeDasharray: "4 2"
-  }), /*#__PURE__*/React.createElement(Line, {
+  }), /*#__PURE__*/React.createElement(Tooltip, MATCH_TT), /*#__PURE__*/React.createElement(ReferenceArea, { y1: 0, y2: 0.75, fill: C.red, fillOpacity: 0.13, stroke: "none", ifOverflow: "hidden" }), /*#__PURE__*/React.createElement(ReferenceArea, { y1: 0.75, y2: 0.9, fill: C.amber, fillOpacity: 0.13, stroke: "none", ifOverflow: "hidden" }), /*#__PURE__*/React.createElement(ReferenceArea, { y1: 0.9, y2: 1.1, fill: C.green, fillOpacity: 0.13, stroke: "none", ifOverflow: "hidden" }), /*#__PURE__*/React.createElement(ReferenceArea, { y1: 1.1, y2: 1.25, fill: C.amber, fillOpacity: 0.13, stroke: "none", ifOverflow: "hidden" }), /*#__PURE__*/React.createElement(ReferenceArea, { y1: 1.25, y2: 2, fill: C.red, fillOpacity: 0.13, stroke: "none", ifOverflow: "hidden" }), /*#__PURE__*/React.createElement(Line, {
     dataKey: "ratio",
     name: "Load Ratio",
     stroke: C.orange,
@@ -1187,7 +1321,10 @@ function MatchesTab({
       r: 4,
       fill: C.orange
     }
-  })))), /*#__PURE__*/React.createElement(ST, null, "HID/min vs INTENSIDAD — perfil de carga competitiva"), /*#__PURE__*/React.createElement(ResponsiveContainer, {
+  })))), /*#__PURE__*/React.createElement(TitleQ, {
+    k: "inten",
+    tech: "HID/min vs INTENSIDAD — perfil de carga competitiva"
+  }), /*#__PURE__*/React.createElement(ResponsiveContainer, {
     width: "100%",
     height: 200
   }, /*#__PURE__*/React.createElement(LineChart, {
@@ -1236,7 +1373,10 @@ function MatchesTab({
     dot: {
       r: 3
     }
-  }))), hasHR && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(ST, null, "ZONAS DE FRECUENCIA CARDÍACA"), /*#__PURE__*/React.createElement(ResponsiveContainer, {
+  }))), hasHR && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(TitleQ, {
+    k: "hr",
+    tech: "ZONAS DE FRECUENCIA CARDÍACA"
+  }), /*#__PURE__*/React.createElement(ResponsiveContainer, {
     width: "100%",
     height: 200
   }, /*#__PURE__*/React.createElement(BarChart, {
@@ -1293,7 +1433,10 @@ function MatchesTab({
     name: "Z5",
     stackId: "hr",
     fill: C.red
-  })))), hasAccel && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(ST, null, "ACELERACIONES vs DESACELERACIONES — carga neuromuscular"), /*#__PURE__*/React.createElement("p", {
+  })))), hasAccel && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(TitleQ, {
+    k: "accel",
+    tech: "ACELERACIONES vs DESACELERACIONES — carga neuromuscular"
+  }), /*#__PURE__*/React.createElement("p", {
     style: {
       color: C.dim,
       fontSize: 10,
@@ -3981,7 +4124,7 @@ function buildRecs(ms, unified, heat) {
     if (hi >= 0.9) add("cuerpo", "info", `${Math.round(hi * 100)}% del tiempo en zonas de FC 4-5: alta demanda cardiovascular. Cuida sueño, hidratación y comida de recuperación.`);
   }
   if (last.rpe >= 8 || last.loadRatio != null && last.loadRatio > 1.15) add("cuerpo", "info", "Partido de carga alta: 24-48 h de recuperación activa (movilidad, sueño, hidratación) antes de volver a trabajo intenso.");
-  if (unified && unified.calibrating) add("cuerpo", "info", `ACWR en calibración (día ${unified.daysOfData} de 28): no lo uses para decidir carga todavía.`);else if (unified && unified.acwr != null) {
+  if (unified && unified.insufficientTraining) add("cuerpo", "info", "ACWR no calculable: faltan entrenos registrados (mínimo 3 en 28 días). Decide la carga con RPE, minutos y la sensación de Mateo.");else if (unified && unified.calibrating) add("cuerpo", "info", `ACWR en calibración (día ${unified.daysOfData} de 28): no lo uses para decidir carga todavía.`);else if (unified && unified.acwr != null) {
     const a = unified.acwr;
     if (a > 1.5) add("cuerpo", "alert", `ACWR ${a}: zona de sobrecarga. Reduce volumen o intensidad esta semana.`);else if (a > 1.3) add("cuerpo", "warn", `ACWR ${a}: precaución. No subas más la carga.`);else if (a < 0.8) add("cuerpo", "info", `ACWR ${a}: carga baja; hay margen para subir.`);else add("cuerpo", "ok", `ACWR ${a}: zona óptima.`);
   }
@@ -4377,6 +4520,16 @@ function Dashboard() {
     const lastMatch = curMatches[curMatches.length - 1];
     return daysBetween(lastMatch.dateObj, new Date());
   }, [curMatches]);
+  const trainRecent = curTraining.filter(t => t.dateObj && daysBetween(t.dateObj, new Date()) <= 28).length;
+  const acwrGate = trainRecent < 3;
+  ACWR_RELIABLE = !acwrGate;
+  const unifiedShown = acwrGate && unifiedACWR && !unifiedACWR.calibrating ? {
+    insufficientTraining: true,
+    acwr: null,
+    acuteLoad: unifiedACWR.acuteLoad,
+    chronicLoad: unifiedACWR.chronicLoad,
+    trainRecent
+  } : unifiedACWR;
   return /*#__PURE__*/React.createElement("div", {
     style: {
       background: C.bg,
@@ -4413,7 +4566,7 @@ function Dashboard() {
       margin: 0
     }
   }, "GPS Performance Tracker · Season 26-27 · EFMO Boadilla Cadete A")), /*#__PURE__*/React.createElement(UnifiedACWRBanner, {
-    unified: unifiedACWR,
+    unified: unifiedShown,
     matchOnly: matchOnlyACWR,
     trainingOnly: trainingOnlyACWR,
     daysSinceMatch: daysSinceLastMatch
@@ -4441,9 +4594,11 @@ function Dashboard() {
       textTransform: "uppercase",
       cursor: "pointer"
     }
-  }, label))), tab === "matches" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(RecsPanel, {
+  }, label)), /*#__PURE__*/React.createElement(ModeToggle, null)), tab === "matches" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Semaforo, {
+    matches: curMatches
+  }), /*#__PURE__*/React.createElement(RecsPanel, {
     matches: curMatches,
-    unified: unifiedACWR
+    unified: unifiedShown
   }), /*#__PURE__*/React.createElement(MatchesTab, {
     matches: curMatches,
     calibrate: true,
@@ -4471,9 +4626,9 @@ function Dashboard() {
       margin: 0,
       marginBottom: 8
     }
-  }, "Dashboard v6.5 · Season 26-27 · Google Sheets ", data.liveMatch ? "LIVE" : "SEED", " · ", new Date().toLocaleDateString("es-MX")))));
+  }, "Dashboard v6.6 · Season 26-27 · Google Sheets ", data.liveMatch ? "LIVE" : "SEED", " · ", new Date().toLocaleDateString("es-MX")))));
 }
-ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(Dashboard, null));
+ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(ModeProvider, null, /*#__PURE__*/React.createElement(Dashboard, null)));
 </script>
 </body>
 </html>
