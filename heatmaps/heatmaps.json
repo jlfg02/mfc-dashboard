@@ -102,5 +102,30 @@
     "img": "heatmaps/2026-10-17_2T.webp"
    }
   ]
+ },
+ {
+  "date": "2026-11-07",
+  "label": "vs Atl. Chopera Alcobendas",
+  "kind": "Liga RFFM",
+  "minutesPlayed": 80,
+  "note": "Partido oficial completo (2×40 min), de 6 pivote. 1ª parte más adelantado (33% en el tercio de ataque); 2ª parte más replegado (26% en el tercio defensivo).",
+  "halves": [
+   {
+    "half": 1,
+    "def": 15,
+    "mid": 52,
+    "att": 33,
+    "minutes": 40,
+    "img": "heatmaps/2026-11-07_1T.webp"
+   },
+   {
+    "half": 2,
+    "def": 26,
+    "mid": 56,
+    "att": 18,
+    "minutes": 40,
+    "img": "heatmaps/2026-11-07_2T.webp"
+   }
+  ]
  }
 ]

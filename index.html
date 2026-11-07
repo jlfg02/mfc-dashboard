@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mateo &middot; GPS Performance Dashboard v6.6</title>
+  <title>Mateo &middot; GPS Performance Dashboard v6.7</title>
   <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
   <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
@@ -975,6 +975,23 @@ function Semaforo({ matches }) {
 
 // ───── DETALLE DEL ÚLTIMO PARTIDO (con franjas) ─────────────────────────────
 const MATCH_DETAIL = {
+  "2026-11-07": {
+    halves: {
+      h1: { td: 4479, hid: 952, hsr: 243, sprintDist: 480, sprints: 25 },
+      h2: { td: 4686, hid: 919, hsr: 169, sprintDist: 575, sprints: 31 }
+    },
+    hr: { avg: 175, max: 186, zones: [5, 9, 12, 39, 18] },
+    bestSprint: "7,74 m/s en la 1ª parte, min 6 (61 m en 9 s); mejor de la 2ª: 6,67 m/s",
+    notes: [
+      "Mejor partido GPS de la temporada en España: HID 1.870 m (23,4 por min) vs tu promedio 21,4 → Load Ratio 1,09. Vuelta tras 3 semanas sin partido registrado.",
+      "Explosividad muy por encima de lo habitual: 56 sprints (+47% vs Ardave), 1.055 m de sprint (+94%) y velocidad máxima 7,74 m/s (27,9 km/h), la mejor del curso.",
+      "Sin caída en la 2ª parte: distancia +5%, HID −3%, sprints 25→31 y metros de sprint +20%. Solo bajó el HSR (243→169 m).",
+      "Mapa de zonas: 1ª parte adelantado (33% ataque / 52% medio); 2ª parte más replegado (26% defensa / 56% medio), posición de 6.",
+      "Cardio alto pero menos extremo que vs Ardave: 57 de 83 min en zonas 4-5 (antes 72). FC media ~175, máxima 186 (antes 193).",
+      "Frena más de lo que arranca: 101 deceleraciones vs 88 aceleraciones (1,15) — récord absoluto de frenadas, carga excéntrica en isquios y aductores.",
+      "Work Rate 99% y esfuerzo percibido 6-7/10: mucho trabajo con sensación de control."
+    ]
+  },
   "2026-10-17": {
     halves: {
       h1: { td: 4802, hid: 932, hsr: 175, sprintDist: 386, sprints: 24 },
@@ -4626,7 +4643,7 @@ function Dashboard() {
       margin: 0,
       marginBottom: 8
     }
-  }, "Dashboard v6.6 · Season 26-27 · Google Sheets ", data.liveMatch ? "LIVE" : "SEED", " · ", new Date().toLocaleDateString("es-MX")))));
+  }, "Dashboard v6.7 · Season 26-27 · Google Sheets ", data.liveMatch ? "LIVE" : "SEED", " · ", new Date().toLocaleDateString("es-MX")))));
 }
 ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(ModeProvider, null, /*#__PURE__*/React.createElement(Dashboard, null)));
 </script>
