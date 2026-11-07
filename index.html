@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mateo &middot; GPS Performance Dashboard v6.7</title>
+  <title>Mateo &middot; GPS Performance Dashboard v6.8</title>
   <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
   <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
@@ -936,6 +936,47 @@ function spainContext(list) {
 }
 const _perMin = (x, k) => x.mins > 0 ? x[k] / x.mins : null;
 
+// ───── LÍNEAS DE REFERENCIA: promedio MLS Next 25-26 (gris) y promedio España 26-27 (rojo) ─────
+// Promedios ponderados por minutos jugados. Se calculan en Dashboard() a partir del Sheet: el de
+// MLS es fijo (temporada cerrada), el de España se reconstruye con cada partido nuevo.
+let REF_BASE = { us: null, es: null };
+function computeRefBase(list) {
+  const v = (list || []).filter(x => x && x.mins > 0);
+  if (!v.length) return null;
+  const mins = v.reduce((s, x) => s + x.mins, 0);
+  const pm = k => v.reduce((s, x) => s + (x[k] || 0), 0) / mins;
+  const mean = k => { const a = v.map(x => x[k]).filter(x => x > 0); return a.length ? a.reduce((p, q) => p + q, 0) / a.length : null; };
+  return { n: v.length, mins,
+    hidMin: pm("hid"), intensity: pm("totalDist"), sprintMin: pm("sprintDist"), sprintCountMin: pm("sprintCount"),
+    hsrMin: pm("hsr"), accelMin: pm("accel"), decelMin: pm("decel"), maxSpeed: mean("maxSpeed"), workRate: mean("workRate"), rpe: mean("rpe") };
+}
+const REF_MINS = 80; // partido cadete completo (2×40): las métricas absolutas se escalan a 80 min
+// metric: clave de REF_BASE · mult: factor (80 para absolutos, 1 para "por minuto") · suf: unidad en la etiqueta
+function refLines({ metric, mult = 1, suf = "", joint = false }) {
+  const h = React.createElement, out = [];
+  const fmtV = y => mult === 1 ? y.toFixed(1).replace(".", ",") : String(y);
+  const val = base => base && base[metric] != null ? +(base[metric] * mult).toFixed(mult === 1 ? 2 : 0) : null;
+  const us = val(REF_BASE.us), es = val(REF_BASE.es);
+  const lbl = (text, color, pos) => ({ value: text, position: pos, fill: color, fontSize: 9, fontFamily: "'Space Mono', monospace" });
+  if (us != null) out.push(h(ReferenceLine, { key: "us-" + metric, y: us, stroke: "#8a97ad", strokeDasharray: "6 4", strokeWidth: 1.4, ifOverflow: "extendDomain",
+    label: joint && es != null ? undefined : lbl("MLS " + fmtV(us) + suf, "#8a97ad", "insideBottomLeft") }));
+  if (es != null) out.push(h(ReferenceLine, { key: "es-" + metric, y: es, stroke: C.red, strokeDasharray: "3 3", strokeWidth: 1.4, ifOverflow: "extendDomain",
+    label: lbl(joint && us != null ? "ESP " + fmtV(es) + " · MLS " + fmtV(us) + suf : "ESP " + fmtV(es) + suf, C.red, "insideTopLeft") }));
+  return out; // array (no Fragment): Recharts solo detecta hijos ReferenceLine directos
+}
+function RefLegend({ archived }) {
+  const h = React.createElement, u = REF_BASE.us, e = REF_BASE.es;
+  if (!u && !e) return null;
+  const mono = "'Space Mono', monospace";
+  const sw = (color, dash) => h("span", { style: { display: "inline-block", width: 28, borderTop: "2px dashed " + color, verticalAlign: "middle", marginRight: 6, borderImage: "none", opacity: 1 } });
+  return h("div", { style: { background: C.panel, border: "1px solid " + C.border, borderLeft: "4px solid " + C.red, borderRadius: 8, padding: "10px 14px", margin: "6px 0 16px" } },
+    h("p", { style: { color: C.text, fontSize: 11, fontWeight: 700, marginBottom: 6 } }, "Cómo leer las líneas de referencia de cada gráfica"),
+    h("p", { style: { color: C.text, fontSize: 11, lineHeight: 1.6, margin: 0 } },
+      sw("#8a97ad"), h("b", { style: { color: "#8a97ad" } }, "MLS"), " = promedio de Mateo en MLS Next 25-26 (EE.UU.)", u ? " — " + u.n + " partidos, " + u.mins + " min" : "", ". Es fijo: la temporada está cerrada.",
+      h("br"), sw(C.red), h("b", { style: { color: C.red } }, "ESP"), " = promedio de Mateo en España 26-27", e ? " — " + e.n + " partido" + (e.n > 1 ? "s" : "") + ", " + e.mins + " min" : "", ". Se recalcula con cada partido nuevo, así que la línea se mueve: un punto por encima de ESP es mejor que su propio estándar actual.",
+      h("br"), h("span", { style: { color: C.dim, fontSize: 10, fontFamily: mono } }, "Ambos promedios están ponderados por minutos jugados. En las gráficas de valores absolutos (HID en metros, aceleraciones/frenadas) la referencia se escala a un partido completo de 80 min.")));
+}
+
 function Semaforo({ matches }) {
   const mode = useMode();
   const ctx = spainContext(matches);
@@ -1168,7 +1209,7 @@ function MatchesTab({
     value: latest === null || latest === void 0 ? void 0 : latest.loadRatio,
     color: loadRatioColor(latest === null || latest === void 0 ? void 0 : latest.loadRatio),
     sub: loadRatioLabel(latest === null || latest === void 0 ? void 0 : latest.loadRatio)
-  })), /*#__PURE__*/React.createElement(ProgressSection, {
+  })), /*#__PURE__*/React.createElement(RefLegend, { archived: archived }), /*#__PURE__*/React.createElement(ProgressSection, {
     matches: matches
   }), /*#__PURE__*/React.createElement(TitleQ, {
     k: "acwr",
@@ -1278,7 +1319,7 @@ function MatchesTab({
       color: C.dim,
       fontFamily: "'Space Mono'"
     }
-  }), /*#__PURE__*/React.createElement(Bar, {
+  }), refLines({ metric: "hidMin", mult: REF_MINS, suf: " m" }), /*#__PURE__*/React.createElement(Bar, {
     dataKey: "expected",
     name: "Expected HID",
     fill: C.muted,
@@ -1373,7 +1414,7 @@ function MatchesTab({
       color: C.dim,
       fontFamily: "'Space Mono'"
     }
-  }), /*#__PURE__*/React.createElement(Line, {
+  }), refLines({ metric: "hidMin", suf: " HID/min", joint: true }), refLines({ metric: "intensity", suf: " m/min", joint: true }), /*#__PURE__*/React.createElement(Line, {
     dataKey: "hidMin",
     name: "HID/min",
     stroke: C.orange,
@@ -1492,7 +1533,7 @@ function MatchesTab({
       color: C.dim,
       fontFamily: "'Space Mono'"
     }
-  }), /*#__PURE__*/React.createElement(Bar, {
+  }), refLines({ metric: "decelMin", mult: REF_MINS, suf: " frenadas" }), /*#__PURE__*/React.createElement(Bar, {
     dataKey: "accel",
     name: "Aceleraciones",
     fill: C.green,
@@ -4510,6 +4551,7 @@ function Dashboard() {
   const seasonTraining = useMemo(() => splitBySeason(data.training), [data.training]);
   const curMatches = seasonMatches.current;
   const curTraining = seasonTraining.current;
+  REF_BASE = { us: computeRefBase(seasonMatches.past), es: computeRefBase(curMatches) };
   const allSessions = useMemo(() => [...curMatches, ...curTraining].sort(byDate), [curMatches, curTraining]);
   const unifiedACWR = useMemo(() => {
     if (!allSessions.length) return null;
@@ -4643,7 +4685,7 @@ function Dashboard() {
       margin: 0,
       marginBottom: 8
     }
-  }, "Dashboard v6.7 · Season 26-27 · Google Sheets ", data.liveMatch ? "LIVE" : "SEED", " · ", new Date().toLocaleDateString("es-MX")))));
+  }, "Dashboard v6.8 · Season 26-27 · Google Sheets ", data.liveMatch ? "LIVE" : "SEED", " · ", new Date().toLocaleDateString("es-MX")))));
 }
 ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(ModeProvider, null, /*#__PURE__*/React.createElement(Dashboard, null)));
 </script>
