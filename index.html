@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mateo &middot; GPS Performance Dashboard v6.8</title>
+  <title>Mateo &middot; GPS Performance Dashboard v6.9</title>
   <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
   <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
@@ -983,7 +983,8 @@ function Semaforo({ matches }) {
   if (!ctx) return null;
   const { last, avg } = ctx;
   const det = MATCH_DETAIL[_iso(last.dateObj)];
-  const drop = det && det.halves.h1.hid > 0 ? (det.halves.h1.hid - det.halves.h2.hid) / det.halves.h1.hid * 100 : null;
+  const _d1 = det ? _hval(det, "h1", "hid") : null, _d2 = det ? _hval(det, "h2", "hid") : null;
+  const drop = _d1 > 0 && _d2 != null ? (_d1 - _d2) / _d1 * 100 : null;
   const refHid = last.spainBase != null ? last.spainBase : avg(x => x.hidMin);
   const sprintsMin = _perMin(last, "sprintCount");
   const da = last.accel > 0 ? last.decel / last.accel : null;
@@ -1015,7 +1016,28 @@ function Semaforo({ matches }) {
 }
 
 // ───── DETALLE DEL ÚLTIMO PARTIDO (con franjas) ─────────────────────────────
+// Mitades de distinta duración (p. ej. cambio en el 2º tiempo): si existe det.mins se compara por minuto.
+const _hval = (det, half, k) => { const v = det.halves[half][k]; if (v == null) return null; return det.mins ? v / det.mins[half] : v; };
 const MATCH_DETAIL = {
+  "2026-11-14": {
+    mins: { h1: 40, h2: 20 },
+    halves: {
+      h1: { td: 4671, sprints: 27 },
+      h2: { td: 2398, sprints: 10 }
+    },
+    hr: { avg: null, max: 192, zones: [0, 1, 9, 22, 31] },
+    bestSprint: "8,01 m/s en la 2ª parte, min 8 (42 m en 6 s) — récord de la temporada (28,8 km/h); mejor de la 1ª: 7,65 m/s, min 20 (50 m en 8 s)",
+    notes: [
+      "Jugó 60 min (1ª parte completa + 20 min de la 2ª) contra el colista (Galapagar 'B', 16º, 3 pts). Todo se compara por minuto jugado.",
+      "Carrera fuerte en su nivel: 22,2 m de HID por minuto vs su promedio en España 21,8 → Load Ratio 1,02 (Sheet 1,07). Mantiene el estándar de rival top contra el rival más débil.",
+      "El mejor ritmo del curso: 119 m/min (promedio España 109) y carrera a alta velocidad 7,0 m/min (+59% sobre su promedio).",
+      "Velocidad máxima 8,01 m/s (28,8 km/h): la mejor registrada nunca, también por encima de su tope en MLS Next (7,94).",
+      "Sprints en su promedio por minuto (0,62 vs 0,64); en la 2ª parte bajó de 0,68 a 0,50 sprints/min (−26%) aunque el ritmo general se mantuvo (117 → 120 m/min, aprox.).",
+      "Frenadas y arranques equilibrados: 65 / 65 (ratio 1,00, el mejor del curso; venía de 1,15). Menos carga excéntrica que la semana pasada.",
+      "Cardio muy alto: 53 de 63 min en zonas 4-5 (31 en zona 5) y máxima 192. Esfuerzo percibido 8/10 para 60 min (la semana pasada 6,5 con 80): partido intenso aunque el rival fuera débil.",
+      "Sin molestias reportadas."
+    ]
+  },
   "2026-11-07": {
     halves: {
       h1: { td: 4479, hid: 952, hsr: 243, sprintDist: 480, sprints: 25 },
@@ -1113,19 +1135,21 @@ function MatchDetailSection({ matches }) {
       m.expBasis && h("p", { style: Object.assign({}, sub, { marginTop: 10, marginBottom: 0 }) }, (mode === "mateo" ? "Tú contra tú: " : "Load Ratio ") + m.loadRatio + " (HID real " + m.hid + " m vs esperado " + m.expHID + " m) — " + m.expBasis + ".")),
     h("div", { style: card },
       h("p", { style: sub }, (mode === "mateo" ? "¿Aguanté el segundo tiempo? " : "1ª parte vs 2ª parte: ¿mantuviste el nivel o bajaste? ") + "Barra azul = 1ª parte, naranja = 2ª parte."),
-      hv.map(([lbl, k]) => {
-        const a = det.halves.h1[k], b = det.halves.h2[k], mx = Math.max(a, b), d = dl(b, a);
+      det.mins && h("p", { style: sub }, "Mitades de distinta duración (" + det.mins.h1 + " y " + det.mins.h2 + " min): se comparan por minuto jugado. Solo se muestran las métricas que StatSports da por mitad."),
+      hv.filter(([lbl, k]) => _hval(det, "h1", k) != null && _hval(det, "h2", k) != null).map(([lbl, k]) => {
+        const a = _hval(det, "h1", k), b = _hval(det, "h2", k), mx = Math.max(a, b), d = dl(b, a);
+        const fv = v => det.mins ? v.toFixed(k === "sprints" ? 2 : 1) + "/min" : v;
         const g = k === "hid" ? gradeMetric("less", d == null ? null : -d, null, TH.drop2h) : null;
         return h("div", { key: k, style: { marginBottom: 10 } },
           h("div", { style: { display: "flex", justifyContent: "space-between", fontSize: 10, fontFamily: mono, color: C.text, gap: 8, flexWrap: "wrap" } },
-            h("span", null, dot(g), mode === "mateo" ? hvM[k] : lbl), h("span", { style: { color: dlCol(d) } }, "1ª " + a + " → 2ª " + b + " (" + dlTxt(d) + ")")),
+            h("span", null, dot(g), mode === "mateo" ? hvM[k] : lbl), h("span", { style: { color: dlCol(d) } }, "1ª " + fv(a) + " → 2ª " + fv(b) + " (" + dlTxt(d) + ")")),
           h("div", { style: { display: "flex", gap: 3, marginTop: 3 } },
             h("div", { style: { height: 6, borderRadius: 3, background: C.accent, width: (a / mx * 50) + "%" } }),
             h("div", { style: { height: 6, borderRadius: 3, background: C.orange, width: (b / mx * 50) + "%" } })));
       }),
       h("p", { style: Object.assign({}, sub, { marginBottom: 0 }) }, "Franja de la caída del HID en el 2º tiempo: 🟢 hasta −10% · 🟡 −10% a −20% · 🔴 más de −20%.")),
     h("div", { style: card },
-      h("p", { style: sub }, gl(mode, "hrZones") + ": minutos en cada zona. FC media " + det.hr.avg + " bpm, máxima " + det.hr.max + " bpm. " + GLOSS.hrZones.what),
+      h("p", { style: sub }, gl(mode, "hrZones") + ": minutos en cada zona. FC media " + (det.hr.avg == null ? "no disponible" : det.hr.avg + " bpm") + ", máxima " + det.hr.max + " bpm. " + GLOSS.hrZones.what),
       det.hr.zones.map((v, i) => h("div", { key: i, style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 6 } },
         h("span", { style: { width: 60, fontSize: 10, fontFamily: mono, color: C.text } }, "Zona " + (i + 1)),
         h("div", { style: { flex: 1, background: C.panel2, borderRadius: 3, height: 8 } },
@@ -4685,7 +4709,7 @@ function Dashboard() {
       margin: 0,
       marginBottom: 8
     }
-  }, "Dashboard v6.8 · Season 26-27 · Google Sheets ", data.liveMatch ? "LIVE" : "SEED", " · ", new Date().toLocaleDateString("es-MX")))));
+  }, "Dashboard v6.9 · Season 26-27 · Google Sheets ", data.liveMatch ? "LIVE" : "SEED", " · ", new Date().toLocaleDateString("es-MX")))));
 }
 ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(ModeProvider, null, /*#__PURE__*/React.createElement(Dashboard, null)));
 </script>
