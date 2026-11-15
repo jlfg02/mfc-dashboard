@@ -127,5 +127,30 @@
     "img": "heatmaps/2026-11-07_2T.webp"
    }
   ]
+ },
+ {
+  "date": "2026-11-14",
+  "label": "vs C.D. Galapagar 'B'",
+  "kind": "Liga RFFM",
+  "minutesPlayed": 60,
+  "note": "Victoria 3-0 vs el colista. Jugó 60 min: 1ª parte completa de 6 pivote y 20 min de la 2ª como falso 9 (sale del área y baja a recibir: solo 16% en el tercio de ataque, 70% en el medio). Ambas mitades pesan por minutos jugados.",
+  "halves": [
+   {
+    "half": 1,
+    "def": 22,
+    "mid": 65,
+    "att": 13,
+    "minutes": 40,
+    "img": "heatmaps/2026-11-14_1T.webp"
+   },
+   {
+    "half": 2,
+    "def": 14,
+    "mid": 70,
+    "att": 16,
+    "minutes": 20,
+    "img": "heatmaps/2026-11-14_2T.webp"
+   }
+  ]
  }
 ]
