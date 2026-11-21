@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mateo &middot; GPS Performance Dashboard v6.9</title>
+  <title>Mateo &middot; GPS Performance Dashboard v6.10</title>
   <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
   <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
@@ -1017,8 +1017,21 @@ function Semaforo({ matches }) {
 
 // ───── DETALLE DEL ÚLTIMO PARTIDO (con franjas) ─────────────────────────────
 // Mitades de distinta duración (p. ej. cambio en el 2º tiempo): si existe det.mins se compara por minuto.
-const _hval = (det, half, k) => { const v = det.halves[half][k]; if (v == null) return null; return det.mins ? v / det.mins[half] : v; };
+const _hval = (det, half, k) => { if (!det.halves) return null; const v = det.halves[half][k]; if (v == null) return null; return det.mins ? v / det.mins[half] : v; };
 const MATCH_DETAIL = {
+  "2026-11-21": {
+    halves: null,
+    hr: { avg: null, max: 190, zones: [18, 10, 18, 26, 12] },
+    bestSprint: "7,71 m/s en el arranque de la 1ª parte (segunda mejor del curso en partido oficial)",
+    notes: [
+      "Empate 2-2 vs Las Matas 'A' (13º). Jugó los 80 min de 6. Partido muy directo: balón largo de los dos equipos y poco juego por el medio.",
+      "Su partido de menor ritmo en España: 101 m/min (promedio 111) y 17,9 m de HID por minuto vs su promedio 21,9 → Load Ratio 0,82 (Sheet 0,84).",
+      "Lo que más cayó es la carrera rápida: alta velocidad 3,4 m/min (−29%), metros de sprint 7,3 m/min (−32%) y sprints 0,44/min (−30%). Con el balón volando por encima del medio, el 6 tiene menos carreras que hacer.",
+      "No es fatiga: velocidad máxima 7,71 m/s (27,8 km/h), esfuerzo percibido 6-7/10, sin molestias y cardio moderado (38 min en zonas 4-5 frente a 53 la semana pasada).",
+      "Arrancó más de lo que frenó: 77 aceleraciones y 65 deceleraciones (ratio 0,84, el más bajo del curso). Poca carga excéntrica.",
+      "Datos por mitad y mapa de calor pendientes (no venían en las capturas)."
+    ]
+  },
   "2026-11-14": {
     mins: { h1: 40, h2: 20 },
     halves: {
@@ -1133,7 +1146,7 @@ function MatchDetailSection({ matches }) {
               h("td", { style: { color: dlCol(d2) } }, dlTxt(d2)));
           })))),
       m.expBasis && h("p", { style: Object.assign({}, sub, { marginTop: 10, marginBottom: 0 }) }, (mode === "mateo" ? "Tú contra tú: " : "Load Ratio ") + m.loadRatio + " (HID real " + m.hid + " m vs esperado " + m.expHID + " m) — " + m.expBasis + ".")),
-    h("div", { style: card },
+    det.halves && h("div", { style: card },
       h("p", { style: sub }, (mode === "mateo" ? "¿Aguanté el segundo tiempo? " : "1ª parte vs 2ª parte: ¿mantuviste el nivel o bajaste? ") + "Barra azul = 1ª parte, naranja = 2ª parte."),
       det.mins && h("p", { style: sub }, "Mitades de distinta duración (" + det.mins.h1 + " y " + det.mins.h2 + " min): se comparan por minuto jugado. "),
       hv.filter(([lbl, k]) => _hval(det, "h1", k) != null && _hval(det, "h2", k) != null).map(([lbl, k]) => {
@@ -4709,7 +4722,7 @@ function Dashboard() {
       margin: 0,
       marginBottom: 8
     }
-  }, "Dashboard v6.9 · Season 26-27 · Google Sheets ", data.liveMatch ? "LIVE" : "SEED", " · ", new Date().toLocaleDateString("es-MX")))));
+  }, "Dashboard v6.10 · Season 26-27 · Google Sheets ", data.liveMatch ? "LIVE" : "SEED", " · ", new Date().toLocaleDateString("es-MX")))));
 }
 ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(ModeProvider, null, /*#__PURE__*/React.createElement(Dashboard, null)));
 </script>
