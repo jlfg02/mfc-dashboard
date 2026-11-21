@@ -152,5 +152,30 @@
     "img": "heatmaps/2026-11-14_2T.webp"
    }
   ]
+ },
+ {
+  "date": "2026-11-21",
+  "label": "vs U.D. Las Matas 'A'",
+  "kind": "Liga RFFM",
+  "minutesPlayed": 80,
+  "note": "Empate 2-2. 80 min: de 6 pivote los primeros ~60 min y de 8 los últimos ~20. Partido muy directo (balón largo de los dos equipos).",
+  "halves": [
+   {
+    "half": 1,
+    "def": 16,
+    "mid": 69,
+    "att": 15,
+    "minutes": 40,
+    "img": "heatmaps/2026-11-21_1T.webp"
+   },
+   {
+    "half": 2,
+    "def": 20,
+    "mid": 61,
+    "att": 19,
+    "minutes": 40,
+    "img": "heatmaps/2026-11-21_2T.webp"
+   }
+  ]
  }
 ]

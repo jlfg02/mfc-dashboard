@@ -1020,16 +1020,20 @@ function Semaforo({ matches }) {
 const _hval = (det, half, k) => { if (!det.halves) return null; const v = det.halves[half][k]; if (v == null) return null; return det.mins ? v / det.mins[half] : v; };
 const MATCH_DETAIL = {
   "2026-11-21": {
-    halves: null,
+    halves: {
+      h1: { td: 4291, hid: 754, hsr: 171, sprintDist: 336 },
+      h2: { td: 3789, hid: 680, hsr: 100, sprintDist: 247 }
+    },
     hr: { avg: null, max: 190, zones: [18, 10, 18, 26, 12] },
     bestSprint: "7,71 m/s en el arranque de la 1ª parte (segunda mejor del curso en partido oficial)",
     notes: [
-      "Empate 2-2 vs Las Matas 'A' (13º). Jugó los 80 min de 6. Partido muy directo: balón largo de los dos equipos y poco juego por el medio.",
+      "Empate 2-2 vs Las Matas 'A' (13º). 80 min: de 6 los primeros ~60 y de 8 los últimos ~20. Partido muy directo: balón largo de los dos equipos y poco juego por el medio.",
       "Su partido de menor ritmo en España: 101 m/min (promedio 111) y 17,9 m de HID por minuto vs su promedio 21,9 → Load Ratio 0,82 (Sheet 0,84).",
+      "Aun así, por encima de su promedio en MLS Next 25-26 (HID 15,5 m/min, sprints 0,40/min): el partido 'malo' en España exige más que su partido medio en EE.UU.",
       "Lo que más cayó es la carrera rápida: alta velocidad 3,4 m/min (−29%), metros de sprint 7,3 m/min (−32%) y sprints 0,44/min (−30%). Con el balón volando por encima del medio, el 6 tiene menos carreras que hacer.",
-      "No es fatiga: velocidad máxima 7,71 m/s (27,8 km/h), esfuerzo percibido 6-7/10, sin molestias y cardio moderado (38 min en zonas 4-5 frente a 53 la semana pasada).",
-      "Arrancó más de lo que frenó: 77 aceleraciones y 65 deceleraciones (ratio 0,84, el más bajo del curso). Poca carga excéntrica.",
-      "Datos por mitad y mapa de calor pendientes (no venían en las capturas)."
+      "2ª parte algo más baja: distancia −12%, HID −10%, HSR −42% y sprint −26% por minuto. Coincide con el cambio a 8 y un partido más roto.",
+      "Mapa: 1ª parte de 6 muy central (69% en el medio), ocupando de área a área. 2ª parte cargado al carril izquierdo y llegando al área rival (19% en ataque), propio de un 8.",
+      "No es fatiga: velocidad máxima 7,71 m/s (27,8 km/h), esfuerzo percibido 6-7/10, sin molestias y cardio moderado (38 min en zonas 4-5 frente a 53 la semana pasada). Arrancó más de lo que frenó (77/65)."
     ]
   },
   "2026-11-14": {
