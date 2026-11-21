@@ -2,7 +2,7 @@
 """PDF resumen de 1 página por partido (lo que sale del dashboard, para WhatsApp/correo).
 Uso: python3 tools/match_pdf.py <match_log.csv> <textos.json> <salida.pdf>
 El CSV es la exportación de MATCH_LOG; textos.json trae fecha, lectura y mensajes."""
-import csv, json, sys, asyncio, html
+import csv, json, sys, asyncio, html, base64, pathlib
 from playwright.async_api import async_playwright
 CSV, TXT, OUT = sys.argv[1:4]
 T = json.load(open(TXT))
@@ -54,6 +54,30 @@ svg += "</svg>"
 z = T["hr_zones"]; zmax = max(z); zc = ["#b8c2d0", "#5b8def", G, A, R]
 zones = "".join(f'<div class="z"><span>Z{i+1}</span><div class="zt"><div style="width:{v/zmax*100}%;background:{zc[i]}"></div></div><b>{v} min</b></div>' for i, v in enumerate(z))
 tiles = "".join(f'<div class="tile" style="border-left-color:{ {"g":G,"a":A,"r":R}[c] }"><div class="tl">{html.escape(l)}</div><div class="tv" style="color:{ {"g":G,"a":A,"r":R}[c] }">{html.escape(v)}</div><div class="ts">{html.escape(s)}</div></div>' for l, v, s, c in T["tiles"])
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+hm = next((x for x in json.load(open(ROOT/"heatmaps/heatmaps.json")) if x["date"] == T["date"]), None)
+page2 = ""
+if hm:
+    def pitch(hf):
+        img = base64.b64encode((ROOT/hf["img"]).read_bytes()).decode()
+        zb = "".join(f'<div class="zb"><span>{lab}</span><div class="zbt"><div style="width:{hf[k]}%;background:{c}"></div></div><b>{hf[k]}%</b></div>' for lab, k, c in [("Ataque","att","#e8743b"),("Medio","mid","#38bdf8"),("Defensa","def","#5b8def")])
+        pos = T.get("positions", {}).get(str(hf["half"]), "")
+        return f'<div class="pc"><div class="ph">{hf["half"]}ª parte · {hf.get("minutes","")} min{" · " + pos if pos else ""}</div><img src="data:image/webp;base64,{img}"><div class="arrow">{"Ataca hacia arriba ↑" if hf["half"]==1 else "Ataca hacia abajo ↓"}</div>{zb}</div>'
+    halves = ""
+    H2 = T.get("halves")
+    if H2:
+        mm = H2["mins"]; rowsH = ""
+        for lab, k, d in [("Distancia (m/min)","td",0),("Corriendo fuerte HID (m/min)","hid",1),("Alta velocidad HSR (m/min)","hsr",1),("Sprint (m/min)","sprintDist",1),("Sprints por min","sprints",2)]:
+            a, b2 = H2["h1"].get(k), H2["h2"].get(k)
+            if a is None or b2 is None: continue
+            a, b2 = a/mm[0], b2/mm[1]; dd = (b2-a)/a*100
+            rowsH += f'<tr><td>{lab}</td><td>{es(a,d)}</td><td>{es(b2,d)}</td><td style="color:{band(dd)};font-weight:800">{dd:+.0f}%</td></tr>'
+        halves = f'<h2>1ª vs 2ª parte (por minuto)</h2><table class="ht"><tr><th></th><th>1ª parte</th><th>2ª parte</th><th>Cambio</th></tr>{rowsH}</table>'
+    page2 = f'''<div style="break-before:page"></div>
+<div class="hd"><div><h1>Dónde jugó · vs {html.escape(T["opp"])}</h1><div class="sub">Mapas de calor por mitad (StatSports) · % del tiempo en cada tercio</div></div><div class="res"><div class="sc" style="font-size:18px">{T["score"]}</div></div></div>
+<div class="pitches">{"".join(pitch(h) for h in hm["halves"])}</div>
+{halves}
+<h2>Valoración técnica de su posición</h2><ul>{"".join(f"<li>{x}</li>" for x in T.get("position_notes", []))}</ul>'''
 li = lambda xs: "".join(f"<li>{x}</li>" for x in xs)
 doc = f'''<!doctype html><html><head><meta charset="utf-8"><style>
 @page {{ size: A4; margin: 10mm 11mm; }}
@@ -74,6 +98,9 @@ h2 {{ font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:{N};
 ul {{ margin:3px 0; padding-left:16px; }} li {{ margin:2px 0; line-height:1.4; }}
 .box {{ border-radius:8px; padding:8px 12px; margin-top:8px; }} .mateo {{ background:#fff7e6; border:1px solid #f3d38a; }} .staff {{ background:#eef2f8; border:1px solid #cdd7e6; }}
 .box h3 {{ margin:0 0 3px; font-size:11.5px; }}
+.pitches {{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:10px; }} .pc img {{ width:100%; border-radius:6px; display:block; }} .ph {{ font-weight:800; font-size:12px; margin-bottom:4px; }} .arrow {{ font-size:9px; color:{N}; margin:3px 0 4px; }}
+.zb {{ display:grid; grid-template-columns:50px 1fr 34px; gap:6px; align-items:center; font-size:10px; margin:2px 0; }} .zbt {{ background:#f1f4f7; height:9px; border-radius:3px; }} .zbt div {{ height:9px; border-radius:3px; }}
+.ht {{ border-collapse:collapse; width:100%; font-size:10.5px; }} .ht td, .ht th {{ border-bottom:1px solid #e3e8ee; padding:3px 6px; text-align:right; }} .ht td:first-child, .ht th:first-child {{ text-align:left; }}
 .ft {{ margin-top:8px; font-size:8.5px; color:{N}; display:flex; justify-content:space-between; }}
 </style></head><body>
 <div class="hd"><div><h1>Mateo Favela · vs {html.escape(T["opp"])}</h1><div class="sub">{T["sub"]}</div></div>
@@ -89,6 +116,7 @@ ul {{ margin:3px 0; padding-left:16px; }} li {{ margin:2px 0; line-height:1.4; }
 <div class="box staff"><h3>{T["staff_title"]}</h3><ul>{li(T["staff"])}</ul></div>
 <div class="box mateo"><h3>{T["mateo_title"]}</h3>{T["mateo"]}</div>
 <div class="ft"><span>Datos: GPS + pulsómetro StatSports · Análisis MFC</span><span>Dashboard completo: mateofavela.com</span></div>
+{page2}
 </body></html>'''
 open(OUT.replace(".pdf", ".html"), "w").write(doc)
 async def main():
