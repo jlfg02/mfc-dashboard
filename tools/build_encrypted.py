@@ -18,6 +18,9 @@ dataurl = "data:application/json;base64," + base64.b64encode(json.dumps(hm).enco
 assert 'const HEATMAP_URL = "heatmaps/heatmaps.json";' in html
 html = html.replace('const HEATMAP_URL = "heatmaps/heatmaps.json";', f'const HEATMAP_URL = "{dataurl}";')
 html = html.replace('fetch(HEATMAP_URL + "?cb=" + Date.now())', 'fetch(HEATMAP_URL)')
+# En mateofavela.com (sitio de Mateo) se abre por defecto en Modo Mateo
+assert 'let init = "tech";' in html
+html = html.replace('let init = "tech";', 'let init = "mateo";')
 (work/"dashboard.html").write_text(html)
 (work/"at-9k2x7m4q.html").write_text((root/"tools/at-9k2x7m4q.src.html").read_text())
 

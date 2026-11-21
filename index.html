@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mateo &middot; GPS Performance Dashboard v6.10</title>
+  <title>Mateo &middot; GPS Performance Dashboard v7.0</title>
   <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
   <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
@@ -4550,7 +4550,112 @@ function HeatmapSection() {
 }
 
 // ───── DASHBOARD COMPONENT & ROOT RENDER ───────────────────────────────────
+
+// ───── MODO MATEO (v7): lectura sin números, anclada a lo que sintió ─────────
+// MATEO_STORY se escribe cada semana con lo que Mateo contó del partido; las escalas salen de los datos del Sheet.
+const MATEO_STORY = {
+ "2026-11-21": {
+  "title": "Tu partido vs Las Matas",
+  "pos": {
+   "1": "de 6",
+   "2": "de 6 y de 8 al final"
+  },
+  "verdict": "No jugaste peor: el partido pasó por encima de ti. Y aun así, tu cuerpo trabajó más que en tu partido normal de Estados Unidos.",
+  "feelings": [
+   [
+    "Me sentí 6-7 de esfuerzo",
+    "Tus datos dicen lo mismo: tu corazón trabajó menos que la semana pasada y tuviste menos carreras fuertes. No estabas cansado: al empezar llegaste a una de tus velocidades más altas del año."
+   ],
+   [
+    "Me frustró el pelotazo",
+    "Tiene sentido y tiene una razón real: fue el partido en España en el que menos tuviste que correr fuerte. Cuando el balón vuela por encima del medio, el 6 se queda esperando."
+   ],
+   [
+    "Aquí no juego como en la MLS",
+    "En lo físico es al revés: incluso este partido, el más flojo de tu temporada, fue más exigente que tu partido normal en MLS Next. Aquí tu nivel normal está bastante más arriba."
+   ]
+  ],
+  "anchor": "Tu cuerpo ya juega a otro nivel: lo que en Estados Unidos era un gran partido, aquí es un partido normal para ti. El estilo del equipo no te quita eso. Lo que te pide es usarlo de otra manera: siendo el que gana los rechaces y el que pone el balón en el suelo.",
+  "control": [
+   "Colocarte donde va a caer el rechace del pelotazo.",
+   "Ofrecerte de cara a tus centrales para que no tengan que pegarla larga.",
+   "Hablar y acercar a un compañero para tener a quién pasarla.",
+   "Mantener la intensidad los últimos 20 minutos."
+  ],
+  "nocontrol": [
+   "Cómo decide jugar el equipo.",
+   "Cómo juega el rival.",
+   "El campo, el árbitro y el marcador."
+  ],
+  "pitch_notes": {
+   "1": "De 6 estuviste en todas partes por el centro, de área a área. Eso es ser el que une al equipo.",
+   "2": "Al final, de 8, te fuiste a la izquierda y llegaste al área rival. Ahí es donde un 8 hace daño."
+  },
+  "challenge": [
+   "<b>Segundas jugadas.</b> Cuando veas que tu central o tu portero va a pegar largo, no mires el balón: corre a donde va a caer el rechace. Si ganas esas pelotas, el partido pasa por ti.",
+   "<b>Pídela al pie.</b> Ofrécete de cara a tus centrales antes de que la revienten. Cada vez que la bajas al suelo y das un pase, el equipo juega como a ti te gusta.",
+   "<b>Los últimos 20 minutos.</b> En la segunda parte bajaste un poco. El reto: que el final se parezca al principio."
+  ],
+  "closing": "Lo que sentiste hoy dice mucho de ti: quieres jugar bien al fútbol. Esa frustración es combustible si la conviertes en tareas concretas. Tu familia, Raúl y Gonzalo lo saben, y te vamos a ayudar."
+ }
+};
+function MateoView({ matches }) {
+  const h = React.createElement;
+  const all = (matches || []).filter(m => m.mins > 0).sort(byDate);
+  const past = all.filter(isPastSeason), cur = all.filter(m => !isPastSeason(m));
+  const withStory = cur.filter(m => MATEO_STORY[_iso(m.dateObj)]);
+  const [sel, setSel] = useState(null);
+  const [heat, setHeat] = useState([]);
+  useEffect(() => { fetch(HEATMAP_URL + (HEATMAP_URL.startsWith("data:") ? "" : "?cb=" + Date.now())).then(r => r.ok ? r.json() : []).then(d => setHeat(Array.isArray(d) ? d : [])).catch(() => setHeat([])); }, []);
+  const m = withStory.find(x => _iso(x.dateObj) === sel) || withStory[withStory.length - 1];
+  const card = { background: C.panel, border: "1px solid " + C.border, borderRadius: 12, padding: 16, marginBottom: 14 };
+  const t2 = { color: C.dim, fontSize: 10, letterSpacing: 2, textTransform: "uppercase", fontFamily: "'Space Mono', monospace", margin: "0 0 10px" };
+  if (!m) return h("div", { style: card }, h("p", null, "Todavía no hay resumen para Mateo del último partido."));
+  const S = MATEO_STORY[_iso(m.dateObj)];
+  const prior = cur.filter(x => x.dateObj < m.dateObj);
+  const wavg = rs => rs.reduce((a, x) => a + x.hid, 0) / rs.reduce((a, x) => a + x.mins, 0);
+  const hidPts = [["Tu partido medio en MLS", wavg(past), "#9aa7b8"], ["Este partido", m.hid / m.mins, C.amber],
+    ["Tu partido medio en España", wavg(prior), C.green], ["Tu mejor partido en España", Math.max.apply(null, cur.filter(x => x.dateObj <= m.dateObj).map(x => x.hid / x.mins)), "#0f7a52"]];
+  const vmPts = [["Tu velocidad punta media en MLS", past.reduce((a, x) => a + x.maxSpeed, 0) / past.length, "#9aa7b8"], ["Este partido", m.maxSpeed, C.amber],
+    ["Tu récord", Math.max.apply(null, all.map(x => x.maxSpeed)), "#0f7a52"]];
+  const ladder = (title, pts) => {
+    const vs = pts.map(p => p[1]), lo = Math.min.apply(null, vs) * 0.95, hi = Math.max.apply(null, vs) * 1.03;
+    const sorted = pts.slice().sort((a, b) => a[1] - b[1]);
+    return h("div", { style: { marginBottom: 6 } }, h("div", { style: { fontWeight: 700, fontSize: 14, marginBottom: 2 } }, title),
+      h("div", { style: { position: "relative", height: 92, margin: "0 40px" } },
+        h("div", { style: { position: "absolute", top: 41, left: 0, right: 0, height: 6, borderRadius: 3, background: "linear-gradient(90deg," + C.border + "," + C.green + "66)" } }),
+        sorted.map((p, i) => h("div", { key: i, style: { position: "absolute", left: Math.max(3, Math.min(97, (p[1] - lo) / (hi - lo) * 100)) + "%", top: 0, height: 92, width: 120, transform: "translateX(-50%)", textAlign: "center", fontSize: 11, color: C.text } },
+          h("div", { style: { position: "absolute", left: 52, top: 35, width: 16, height: 16, borderRadius: 8, background: p[2], border: "2px solid " + C.bg } }),
+          h("div", { style: Object.assign({ position: "absolute", left: 0, right: 0, lineHeight: 1.2 }, i % 2 === 0 ? { bottom: 60 } : { top: 56 }) }, p[0])))));
+  };
+  const box = (bg, bd) => ({ background: bg, border: "1px solid " + bd, borderRadius: 12, padding: 14 });
+  const li = xs => h("ul", { style: { margin: "6px 0 0", paddingLeft: 18, lineHeight: 1.6 } }, xs.map((x, i) => h("li", { key: i, dangerouslySetInnerHTML: { __html: x } })));
+  const hm = heat.find(x => x.date === _iso(m.dateObj));
+  return h("div", { style: { maxWidth: 900, margin: "0 auto", fontFamily: "-apple-system, 'Helvetica Neue', Arial, sans-serif" } },
+    withStory.length > 1 && h("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 } }, withStory.map(x => h("button", { key: x.rawDate, onClick: () => setSel(_iso(x.dateObj)),
+      style: { background: x === m ? C.accent : "transparent", color: x === m ? "#000" : C.dim, border: "1px solid " + C.border, borderRadius: 16, padding: "5px 12px", cursor: "pointer" } }, x.date + " · " + x.opponent))),
+    h("div", { style: Object.assign({}, card, { borderLeft: "5px solid " + C.amber }) },
+      h("div", { style: { color: C.dim, fontSize: 12 } }, S.title + " · " + m.date + " · " + (m.result || "") + " · " + m.mins + " min"),
+      h("div", { style: { fontSize: 20, fontWeight: 800, lineHeight: 1.35, marginTop: 6 } }, S.verdict)),
+    h("p", { style: t2 }, "Lo que sentiste y lo que dicen tus datos"),
+    h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 10, marginBottom: 14 } },
+      S.feelings.map((f, i) => h("div", { key: i, style: card }, h("div", { style: { fontWeight: 800, fontSize: 15, marginBottom: 6, color: C.amber } }, "“" + f[0] + "”"), h("div", { style: { fontSize: 14, lineHeight: 1.55 } }, f[1])))),
+    h("div", { style: card }, h("p", { style: t2 }, "Dónde estás tú (cuanto más a la derecha, más)"), ladder("Cuánto corres fuerte", hidPts), ladder("Tu velocidad punta", vmPts)),
+    h("div", { style: Object.assign({}, card, { fontSize: 15, lineHeight: 1.6 }) }, h("p", { style: t2 }, "Lo que te tiene que quedar"), S.anchor),
+    h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10, marginBottom: 14 } },
+      h("div", { style: box(C.green + "18", C.green + "66") }, h("b", null, "Lo que tú controlas"), li(S.control)),
+      h("div", { style: box(C.panel, C.border) }, h("b", null, "Lo que no controlas (y no te tiene que quitar energía)"), li(S.nocontrol))),
+    hm && h("div", { style: card }, h("p", { style: t2 }, "Dónde jugaste (rojo = donde más estuviste)"),
+      h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 } },
+        hm.halves.map(hf => h("div", { key: hf.half }, h("div", { style: { fontWeight: 700, marginBottom: 6 } }, hf.half + "ª parte " + ((S.pos || {})[String(hf.half)] || "")),
+          h("img", { src: hf.img, style: { width: "100%", borderRadius: 8 } }),
+          h("div", { style: { fontSize: 14, lineHeight: 1.5, marginTop: 6 } }, (S.pitch_notes || {})[String(hf.half)] || ""))))),
+    h("div", { style: box(C.amber + "18", C.amber + "66") }, h("b", { style: { fontSize: 15 } }, "Tu reto para el próximo partido"), li(S.challenge)),
+    h("div", { style: Object.assign({}, card, { marginTop: 14, fontSize: 15, lineHeight: 1.6 }) }, S.closing),
+    h("p", { style: { color: C.dim, fontSize: 11, textAlign: "center" } }, "¿Quieres ver todos los números? Cambia a “Técnico” arriba."));
+}
 function Dashboard() {
+  const mode = useMode();
   const [data, setData] = useState({
     matches: [],
     training: [],
@@ -4665,7 +4770,7 @@ function Dashboard() {
       textTransform: "uppercase",
       margin: 0
     }
-  }, "GPS Performance Tracker · Season 26-27 · EFMO Boadilla Cadete A")), /*#__PURE__*/React.createElement(UnifiedACWRBanner, {
+  }, "GPS Performance Tracker · Season 26-27 · EFMO Boadilla Cadete A")), mode !== "mateo" && /*#__PURE__*/React.createElement(UnifiedACWRBanner, {
     unified: unifiedShown,
     matchOnly: matchOnlyACWR,
     trainingOnly: trainingOnlyACWR,
@@ -4694,7 +4799,7 @@ function Dashboard() {
       textTransform: "uppercase",
       cursor: "pointer"
     }
-  }, label)), /*#__PURE__*/React.createElement(ModeToggle, null)), tab === "matches" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Semaforo, {
+  }, label)), /*#__PURE__*/React.createElement(ModeToggle, null)), mode === "mateo" && /*#__PURE__*/React.createElement(MateoView, { matches: data.matches }), mode !== "mateo" && tab === "matches" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Semaforo, {
     matches: curMatches
   }), /*#__PURE__*/React.createElement(RecsPanel, {
     matches: curMatches,
@@ -4704,11 +4809,11 @@ function Dashboard() {
     calibrate: true,
     loading: !data.loaded,
     emptyText: "Season 26-27: sin partidos registrados todavía"
-  }), /*#__PURE__*/React.createElement(HeatmapSection, null)), tab === "training" && /*#__PURE__*/React.createElement(TrainingTab, {
+  }), /*#__PURE__*/React.createElement(HeatmapSection, null)), mode !== "mateo" && tab === "training" && /*#__PURE__*/React.createElement(TrainingTab, {
     sessions: curTraining,
     liveFromSheet: data.liveTraining,
     calibrate: true
-  }), tab === "season2526" && /*#__PURE__*/React.createElement(SeasonArchiveTab, {
+  }), mode !== "mateo" && tab === "season2526" && /*#__PURE__*/React.createElement(SeasonArchiveTab, {
     matches: seasonMatches.past,
     training: seasonTraining.past,
     liveTraining: data.liveTraining
@@ -4726,7 +4831,7 @@ function Dashboard() {
       margin: 0,
       marginBottom: 8
     }
-  }, "Dashboard v6.10 · Season 26-27 · Google Sheets ", data.liveMatch ? "LIVE" : "SEED", " · ", new Date().toLocaleDateString("es-MX")))));
+  }, "Dashboard v7.0 · Season 26-27 · Google Sheets ", data.liveMatch ? "LIVE" : "SEED", " · ", new Date().toLocaleDateString("es-MX")))));
 }
 ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(ModeProvider, null, /*#__PURE__*/React.createElement(Dashboard, null)));
 </script>
